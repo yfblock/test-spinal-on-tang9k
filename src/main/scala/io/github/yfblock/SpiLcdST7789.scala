@@ -2,34 +2,39 @@ package io.github.yfblock
 
 import spinal.core._
 import spinal.lib.fsm._
-import spinal.lib.IMasterSlave
-import spinal.lib.master
-import spinal.lib.Flow
 
-case class SpiLcdPort() extends IMasterSlave {
-    case class dataPort() extends Bundle {
-        val lcd_resetn = out.Bool().setAsReg().init(False);
-        val lcd_clk    = out.Bool();
-        val lcd_cs     = out.Bool().setAsReg().init(True);
-        val lcd_rs     = out.Bool().setAsReg().init(True);
-        val lcd_data   = out.Bool().setAsReg.init(False);
-    }
-    val dataIn = Flow(dataPort());
-    
-    override def asMaster(): Unit = {
-        master(dataIn)
-    }
+import scala.language.postfixOps
+
+case class SpiLcdPort() extends Bundle {
+  val resetn = out(Bool());
+  val clk = out(Bool());
+  val cs = out(Bool());
+  val rs = out(Bool());
+  val data = out(Bool());
+}
+
+object SpiLcdST7789 {
+  def apply(spiLcdPort: SpiLcdPort): Unit = {
+    val spiLcdST7789 = new SpiLcdST7789()
+    spiLcdST7789.io.lcd_resetn <> spiLcdPort.resetn
+    spiLcdST7789.io.lcd_clk <> spiLcdPort.clk
+    spiLcdST7789.io.lcd_cs <> spiLcdPort.cs
+    spiLcdST7789.io.lcd_rs <> spiLcdPort.rs
+    spiLcdST7789.io.lcd_data <> spiLcdPort.data
+  }
 }
 
 case class SpiLcdST7789() extends Component {
   val io = new Bundle {
     val lcd_resetn = out.Bool().setAsReg().init(False);
-    val lcd_clk    = out Bool ();
+    val lcd_clk    = out.Bool();
     val lcd_cs     = out.Bool().setAsReg().init(True);
     val lcd_rs     = out.Bool().setAsReg().init(True);
     val lcd_data   = out.Bool().setAsReg.init(False);
   }
+
   noIoPrefix()
+
   val MAX_CMDS = 70;
   val init_cmd = Vec(UInt(9 bits), MAX_CMDS);
   init_cmd(0)  := U"9'h036";
@@ -103,10 +108,10 @@ case class SpiLcdST7789() extends Component {
   init_cmd(68) := U"9'h1BB";
   init_cmd(69) := U"9'h02C"; // start
 
-  val one_ms    = this.clockDomain.frequency.getValue.toInt / 1000;
-  val CNT_100MS = one_ms * 100;
-  val CNT_120MS = one_ms * 120;
-  val CNT_200MS = one_ms * 200;
+  val ONE_MS    = this.clockDomain.frequency.getValue.toInt / 1000;
+  val CNT_100MS = ONE_MS * 100;
+  val CNT_120MS = ONE_MS * 120;
+  val CNT_200MS = ONE_MS * 200;
 
   io.lcd_clk <> ~this.clockDomain.readClockWire;
   val cmd_index = Reg(UInt(7 bits)).init(0);
@@ -117,7 +122,7 @@ case class SpiLcdST7789() extends Component {
   val pixel = (pixel_cnt >= 21600) ? U"16'hF800" |
     ((pixel_cnt >= 10800) ? U"16'h07E0" | U"16'h001F");
 
-  val lcd_state_machine = new StateMachine {
+  new StateMachine {
     val INIT_RESET   = new State with EntryPoint;
     val INIT_PREPARE = new State;
     val INIT_WAKEUP  = new State;

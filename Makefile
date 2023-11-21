@@ -22,8 +22,11 @@ $(BITSTREAM_FILE) $(REPORT_FILE): $(VERILOG_FILE) rtl/*.tcl
 $(VERILOG_FILE): $(SOURCES) build.sbt rtl/tang-nano-9k.cst
 	sbt "runMain io.github.yfblock.Main"
 
+verilog: $(VERILOG_FILE)
+
 sim: $(SOURCES) build.sbt
 	sbt "runMain io.github.yfblock.TestSpinalSim"
+	gtkwave ./simWorkspace/TM1637/test.vcd
 
 clean:
 	rm -rf impl $(VERILOG_FILE)
@@ -31,4 +34,4 @@ clean:
 flash: $(BITSTREAM_FILE)
 	openFPGALoader -b tangnano9k $<
 
-.PHONY: all clean flash
+.PHONY: all clean flash sim verilog
