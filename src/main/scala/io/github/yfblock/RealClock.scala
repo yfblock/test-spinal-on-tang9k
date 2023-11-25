@@ -18,26 +18,25 @@ class RealClock extends Component {
   val counter = Reg(UInt(40 bits)) init(0)
 
   counter := counter + 1
+
+  // ugly code, but i will learn something to improve this.
   when(counter === 100000) {
     counter := 0
     io.tm.rt4 := io.tm.rt4 + 1
-  }
-  when(io.tm.rt4 === 9) {
-    io.tm.rt4 := 0
-    io.tm.rt3 := io.tm.rt3 + 1
-  }
-
-  when(io.tm.rt3 === 5) {
-    io.tm.rt3 := 0
-    io.tm.rt2 := io.tm.rt2 + 1
-  }
-
-  when(io.tm.rt2 === 9) {
-    io.tm.rt2 := 0
-    io.tm.rt1 := io.tm.rt1 + 1
-  }
-
-  when(io.tm.rt1 === 5) {
-    io.tm.rt1 := 0
+    when(io.tm.rt4 === 9) {
+        io.tm.rt4 := 0
+        io.tm.rt3 := io.tm.rt3 + 1
+        when(io.tm.rt3 === 5) {
+            io.tm.rt3 := 0
+            io.tm.rt2 := io.tm.rt2 + 1
+            when(io.tm.rt2 === 9) {
+                io.tm.rt2 := 0
+                io.tm.rt1 := io.tm.rt1 + 1
+                when(io.tm.rt1 === 5) {
+                    io.tm.rt1 := 0
+                }
+            }
+        }
+    }
   }
 }
