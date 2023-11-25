@@ -26,7 +26,7 @@ verilog: $(VERILOG_FILE)
 
 sim: $(SOURCES) build.sbt
 	sbt "runMain io.github.yfblock.TestSpinalSim"
-	gtkwave ./simWorkspace/TM1637/test.vcd
+	gtkwave ./simWorkspace/Testspinal/test.vcd
 
 clean:
 	rm -rf impl $(VERILOG_FILE)

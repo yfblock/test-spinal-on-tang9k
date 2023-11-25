@@ -1,5 +1,6 @@
 package io.github.yfblock
 
+import spinal.core
 import spinal.core._
 import spinal.lib._
 import spinal.lib.IMasterSlave
@@ -25,6 +26,11 @@ case class TMPort() extends Bundle with IMasterSlave {
     out(clk)
     inout(dio)
   }
+
+  override def setAsReg(): TMPort.this.type = {
+    this.clk.setAsReg().init(True)
+    this
+  }
 }
 
 // Only can change data wire when clk is LOW,
@@ -34,115 +40,115 @@ case class TMPort() extends Bundle with IMasterSlave {
 // when send done it will receive a ACK signal
 // ACK signal will turn DIO as LOW.
 object TM1637 {
-  def apply(clk: Bool, dio: Bool): Unit = {
-    val add1 = new TM1637()
-    add1.io.port.clk <> clk
-    add1.io.port.dio <> dio
-  }
-
-  def apply(port: TMPort): Unit = {
-    val add1 = new TM1637()
-    add1.io.port <> port
-  }
-
   def apply(port: TMPort, led: Bool): Unit = {
     val add1 = new TM1637()
-    add1.io.port <> port
-    add1.io.led <> led
-  }
-}
-
-object I2CWriteData {
-  def apply(STEP: UInt, CLK: Bool, DIO: Bool, VALUE: Bool, NEXT: Unit): Unit = {
-    STEP := STEP + 1
-    when(STEP===0) {
-      CLK := False
-    } elsewhen(STEP === 1) {
-      DIO := VALUE
-    } elsewhen(STEP === 2) {
-      CLK := True
-    } elsewhen(STEP === 3) {
-      NEXT
-    }
+    port <> add1.io.port
+    led := add1.io.led
   }
 }
 
 class TM1637 extends Component {
   val io = new Bundle {
-    val port = master(TMPort())
-    val led = out Bool()
+    val port = master(TMPort().setAsReg())
+    val led = out(Bool()).setAsReg().init(False)
   }
 
-//  val i2c = master(I2c())
+  val dio = TriState(Bool()).setAsReg()
+  dio.write.init(True)
+  dio.writeEnable.init(True)
 
-  val clk = Reg(Bool()) init(True)
-  io.port.clk <> clk
-  io.led := True
+  dio.read := io.port.dio
+  when(dio.writeEnable) {
+    io.port.dio := dio.write
+  }
 
-  val data     = Reg(UInt(8 bits)) init (0);
+  noIoPrefix()
+  //  val i2c = master(I2c())
   val bit_loop = Reg(UInt(4 bits)) init (0);
-  val STEP     = Reg(UInt(3 bits)) init (0);
+  val STEP = Reg(UInt(3 bits)) init (0);
 
-  val WRITE_COMMAND = U"8'b01000100"
-
+//  val WRITE_COMMAND = U"8'b01000100".reversed
+  val WRITE_COMMAND = U(0x87 + 8, 8 bits)
   new StateMachine {
-    val INIT, START, COMMAND1, WAIT_ACK, END, IDLE = new State
+    val START, COMMAND1, ACK, END, IDLE = new State
 
-    setEntry(INIT)
-
-    INIT.whenIsActive {
-      clk := True
-      io.port.dio := True
-      goto(START)
-    }
+    setEntry(START)
 
     START.onEntry(STEP := 0)
-    .whenIsActive {
-      clk := True
-      io.port.dio := False
-      goto(COMMAND1)
-    }
-
-    COMMAND1.onEntry(STEP := 0)
-    .whenIsActive {
-      STEP := STEP + 1
-      when(STEP === 0) {
-        clk := False
-//        io.port.clk := False
-      } elsewhen (STEP === 1) {
-//        io.port.dio := WRITE_COMMAND(bit_loop.resized)
-        io.port.clk := False
-        io.port.dio := True
-      } elsewhen (STEP === 2) {
+      .whenIsActive {
         io.port.clk := True
-        io.port.dio := True
-      } elsewhen (STEP === 3) {
-        io.port.clk := True
-        io.port.dio := True
-        bit_loop := bit_loop + 1
-        STEP := 0
-        when(bit_loop === 7) {
-          goto(WAIT_ACK)
+        dio.write := True
+        STEP := STEP + 1
+        when(STEP === 5) {
+          dio.write := False
+          goto(COMMAND1)
         }
       }
-    }.onExit(bit_loop := 0)
 
-    WAIT_ACK.whenIsActive {
-      clk := ~clk
-      when(clk === False && io.port.dio === False) {
-        goto(IDLE)
+    COMMAND1.onEntry {
+        STEP := 0
+        bit_loop := bit_loop + 1
+      }
+      .whenIsActive {
+        STEP := STEP + 1
+        switch(STEP) {
+          is(0) {
+            io.port.clk := False
+          }
+          is(1) {
+            dio.write := WRITE_COMMAND(bit_loop.resized)
+            bit_loop := bit_loop + 1
+          }
+          is(2) {
+            io.port.clk := True
+          }
+          is(3) {
+            STEP := 0
+            when(bit_loop === 8) {
+              goto(ACK)
+            }
+          }
+        }
+      }.onExit(bit_loop := 0)
+
+    ACK.onEntry(STEP := 0).whenIsActive {
+      STEP := STEP + 1
+      switch(STEP) {
+        is(0) {
+          io.port.clk := False
+        }
+        is(1) {
+          io.port.clk := True
+          when(dio.read === True) {
+            STEP := STEP
+          }
+        }
+        is(2) {
+          io.port.clk := False
+          goto(END)
+        }
       }
     }
 
-    END.whenIsActive {
-      io.port.dio := True
+    END.onEntry(
+      STEP := 0
+    ).whenIsActive {
+      STEP := STEP + 1
+      switch(STEP) {
+        is(0)(io.port.clk := False)
+        is(1)(dio.write := False)
+        is(2)(io.port.clk := True)
+        is(3) {
+          dio.write := True
+          goto(IDLE)
+        }
+      }
     }
 
     IDLE.whenIsActive {
-      io.led := False
+      io.led := True
     }
 
     setEncoding(SpinalEnumEncoding(id => id))
   }
 }
-
