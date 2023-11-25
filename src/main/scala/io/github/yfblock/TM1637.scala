@@ -33,6 +33,18 @@ case class TMPort() extends Bundle with IMasterSlave {
   }
 }
 
+case class TimeDisplay() extends Bundle {
+  val rt1, rt2, rt3, rt4 = UInt(4 bits)
+
+  override def setAsReg(): TimeDisplay.this.type = {
+    this.rt1.setAsReg().init(0)
+    this.rt2.setAsReg().init(0)
+    this.rt3.setAsReg().init(0)
+    this.rt4.setAsReg().init(0)
+    this
+  }
+}
+
 // Only can change data wire when clk is LOW,
 // data can't be changed when clk is HIGH
 // start signal is CLK is HIGH and DIO turn LOW from HIGH
@@ -40,10 +52,39 @@ case class TMPort() extends Bundle with IMasterSlave {
 // when send done it will receive a ACK signal
 // ACK signal will turn DIO as LOW.
 object TM1637 {
-  def apply(port: TMPort, led: Bool): Unit = {
+  def apply(port: TMPort, led: Bool): TM1637 = {
     val add1 = new TM1637()
     port <> add1.io.port
     led := add1.io.led
+    add1
+  }
+
+  def apply(port: TMPort, led: Bool, tm: TimeDisplay): TM1637 = {
+    val add1 = this.apply(port, led)
+    add1.io.display <> tm
+    add1
+  }
+}
+
+object TMData {
+  def apply(data: UInt, end: Bool = False): UInt = {
+    U(8->end, (7 downto 0)->data)
+  }
+
+  def display(num: UInt, end: Bool = False): UInt = {
+    num.mux(
+      0 -> U(8 -> end, (7 downto 0) -> U(0x3f, 8 bits)),
+      1 -> U(8 -> end, (7 downto 0) -> U(0x06, 8 bits)),
+      2 -> U(8 -> end, (7 downto 0) -> U(0x5b, 8 bits)),
+      3 -> U(8 -> end, (7 downto 0) -> U(0x4f, 8 bits)),
+      4 -> U(8 -> end, (7 downto 0) -> U(0x66, 8 bits)),
+      5 -> U(8 -> end, (7 downto 0) -> U(0x6d, 8 bits)),
+      6 -> U(8 -> end, (7 downto 0) -> U(0x7d, 8 bits)),
+      7 -> U(8 -> end, (7 downto 0) -> U(0x07, 8 bits)),
+      8 -> U(8 -> end, (7 downto 0) -> U(0x7f, 8 bits)),
+      9 -> U(8 -> end, (7 downto 0) -> U(0x6f, 8 bits)),
+      default -> U(8 -> end, (7 downto 0) -> U(0x00, 8 bits)),
+    )
   }
 }
 
@@ -51,6 +92,8 @@ class TM1637 extends Component {
   val io = new Bundle {
     val port = master(TMPort().setAsReg())
     val led = out(Bool()).setAsReg().init(False)
+    // val restart = in(Reg(Bool)).init(False)
+    val display = in(TimeDisplay())
   }
 
   val dio = TriState(Bool()).setAsReg()
@@ -67,8 +110,18 @@ class TM1637 extends Component {
   val bit_loop = Reg(UInt(4 bits)) init (0);
   val STEP = Reg(UInt(3 bits)) init (0);
 
-//  val WRITE_COMMAND = U"8'b01000100".reversed
-  val WRITE_COMMAND = U(0x87 + 8, 8 bits)
+  val COMMAND_GROUP = Vec(
+    TMData(U"8'b10001111"), 
+    TMData(U"8'b01000000"), 
+    TMData(U"8'b11000000", True),
+    TMData.display(io.display.rt1.resized, True),
+    TMData.display(io.display.rt2.resized, True) | U(0x80),
+    TMData.display(io.display.rt3.resized, True),
+    TMData.display(io.display.rt4.resized)
+  )
+
+  // val COMMAND_GROUP = Vec(U"9'b010001111", U"9'b001000000", U"9'b111000000", U"9'b111111111", U"9'b111111111", U"9'b111111111", U"9'b011111111")
+  val COMMAND_INDEX = Reg(UInt(4 bits)) init(0)
   new StateMachine {
     val START, COMMAND1, ACK, END, IDLE = new State
 
@@ -87,7 +140,7 @@ class TM1637 extends Component {
 
     COMMAND1.onEntry {
         STEP := 0
-        bit_loop := bit_loop + 1
+        bit_loop := 0
       }
       .whenIsActive {
         STEP := STEP + 1
@@ -96,7 +149,7 @@ class TM1637 extends Component {
             io.port.clk := False
           }
           is(1) {
-            dio.write := WRITE_COMMAND(bit_loop.resized)
+            dio.write := COMMAND_GROUP(COMMAND_INDEX.resized)(bit_loop.resized)
             bit_loop := bit_loop + 1
           }
           is(2) {
@@ -124,8 +177,13 @@ class TM1637 extends Component {
           }
         }
         is(2) {
+          COMMAND_INDEX := COMMAND_INDEX + 1
           io.port.clk := False
-          goto(END)
+          when(COMMAND_GROUP(COMMAND_INDEX.resized)(8)) {
+            goto(COMMAND1)
+          } otherwise {
+            goto(END)
+          }
         }
       }
     }
@@ -140,13 +198,21 @@ class TM1637 extends Component {
         is(2)(io.port.clk := True)
         is(3) {
           dio.write := True
-          goto(IDLE)
+          when(COMMAND_INDEX === COMMAND_GROUP.length) {
+            goto(IDLE)
+          } otherwise {
+            goto(START)
+          }
         }
       }
     }
 
-    IDLE.whenIsActive {
+    IDLE.onEntry(
+      STEP:=0
+    ).whenIsActive {
       io.led := True
+      COMMAND_INDEX := 0
+      goto(START)
     }
 
     setEncoding(SpinalEnumEncoding(id => id))

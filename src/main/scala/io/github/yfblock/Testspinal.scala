@@ -21,6 +21,8 @@ class Testspinal extends Component {
   // or else .cst requires a `io_` prefix.
   noIoPrefix()
 
+  val tclock = TimeDisplay()
+
   val clk = ClockDomain(
     clock = io.xtal_in,
     reset = io.reset_button,
@@ -36,7 +38,10 @@ class Testspinal extends Component {
   new ClockingArea(clk) {
     new SlowArea(100 kHz) {
       SpiLcdST7789(io.lcd_interface)
-      TM1637(io.tm, io.leds(0))
+      TM1637(io.tm, io.leds(0), tclock)
+      RealClock(tclock)
+
+      io.leds(4 downto 1) <> tclock.rt4
     }
   }
 //  new SlowArea(100) {

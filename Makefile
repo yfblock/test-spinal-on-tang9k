@@ -31,7 +31,10 @@ sim: $(SOURCES) build.sbt
 clean:
 	rm -rf impl $(VERILOG_FILE)
 
-flash: $(BITSTREAM_FILE)
+load: $(BITSTREAM_FILE)
 	openFPGALoader -b tangnano9k $<
+
+flash: $(BITSTREAM_FILE)
+	openFPGALoader -b tangnano9k $< -f
 
 .PHONY: all clean flash sim verilog
