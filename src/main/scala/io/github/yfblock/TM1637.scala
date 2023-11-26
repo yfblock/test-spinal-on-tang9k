@@ -52,46 +52,40 @@ case class TimeDisplay() extends Bundle {
 // when send done it will receive a ACK signal
 // ACK signal will turn DIO as LOW.
 object TM1637 {
-  def apply(port: TMPort, led: Bool): TM1637 = {
+
+  def apply(port: TMPort, tm: TimeDisplay): TM1637 = {
     val add1 = new TM1637()
     port <> add1.io.port
-    led := add1.io.led
-    add1
-  }
-
-  def apply(port: TMPort, led: Bool, tm: TimeDisplay): TM1637 = {
-    val add1 = this.apply(port, led)
     add1.io.display <> tm
     add1
   }
 }
 
 object TMData {
-  def apply(data: UInt, end: Bool = False): UInt = {
-    U(8->end, (7 downto 0)->data)
+  def apply(data: Bits, continue: Bool = False): Bits = {
+    continue ## data
   }
 
-  def display(num: UInt, end: Bool = False): UInt = {
-    num.mux(
-      0 -> U(8 -> end, (7 downto 0) -> U(0x3f, 8 bits)),
-      1 -> U(8 -> end, (7 downto 0) -> U(0x06, 8 bits)),
-      2 -> U(8 -> end, (7 downto 0) -> U(0x5b, 8 bits)),
-      3 -> U(8 -> end, (7 downto 0) -> U(0x4f, 8 bits)),
-      4 -> U(8 -> end, (7 downto 0) -> U(0x66, 8 bits)),
-      5 -> U(8 -> end, (7 downto 0) -> U(0x6d, 8 bits)),
-      6 -> U(8 -> end, (7 downto 0) -> U(0x7d, 8 bits)),
-      7 -> U(8 -> end, (7 downto 0) -> U(0x07, 8 bits)),
-      8 -> U(8 -> end, (7 downto 0) -> U(0x7f, 8 bits)),
-      9 -> U(8 -> end, (7 downto 0) -> U(0x6f, 8 bits)),
-      default -> U(8 -> end, (7 downto 0) -> U(0x00, 8 bits)),
-    )
+  def display(num: UInt, dot: Bool,continue: Bool = False): Bits = {
+    continue ## dot ## B(num.mux(
+      0 -> B(0x3f, 7 bits),
+      1 -> B(0x06, 7 bits),
+      2 -> B(0x5b, 7 bits),
+      3 -> B(0x4f, 7 bits),
+      4 -> B(0x66, 7 bits),
+      5 -> B(0x6d, 7 bits),
+      6 -> B(0x7d, 7 bits),
+      7 -> B(0x07, 7 bits),
+      8 -> B(0x7f, 7 bits),
+      9 -> B(0x6f, 7 bits),
+      default -> B(0x00, 7 bits),
+    ))
   }
 }
 
 class TM1637 extends Component {
   val io = new Bundle {
     val port = master(TMPort().setAsReg())
-    val led = out(Bool()).setAsReg().init(False)
     // val restart = in(Reg(Bool)).init(False)
     val display = in(TimeDisplay())
   }
@@ -106,18 +100,17 @@ class TM1637 extends Component {
   }
 
   noIoPrefix()
-  //  val i2c = master(I2c())
   val bit_loop = Reg(UInt(4 bits)) init (0);
   val STEP = Reg(UInt(3 bits)) init (0);
 
   val COMMAND_GROUP = Vec(
-    TMData(U"8'b10001111"), 
-    TMData(U"8'b01000000"), 
-    TMData(U"8'b11000000", True),
-    TMData.display(io.display.rt1.resized, True),
-    TMData.display(io.display.rt2.resized, True) | U(0x80),
-    TMData.display(io.display.rt3.resized, True),
-    TMData.display(io.display.rt4.resized)
+    TMData(B"8'b10001111"), 
+    TMData(B"8'b01000000"), 
+    TMData(B"8'b11000000", True),
+    TMData.display(io.display.rt1.resized, dot = False, continue = True),
+    TMData.display(io.display.rt2.resized, dot = True, continue = True),
+    TMData.display(io.display.rt3.resized, dot = False, continue = True),
+    TMData.display(io.display.rt4.resized, dot = False)
   )
 
   // val COMMAND_GROUP = Vec(U"9'b010001111", U"9'b001000000", U"9'b111000000", U"9'b111111111", U"9'b111111111", U"9'b111111111", U"9'b011111111")
@@ -210,7 +203,6 @@ class TM1637 extends Component {
     IDLE.onEntry(
       STEP:=0
     ).whenIsActive {
-      io.led := True
       COMMAND_INDEX := 0
       goto(START)
     }

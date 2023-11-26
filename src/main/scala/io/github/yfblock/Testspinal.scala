@@ -13,9 +13,10 @@ class Testspinal extends Component {
     val user_button = in Bool()
     val reset_button = in Bool()
     val xtal_in = in Bool();
-    val lcd_interface = out(SpiLcdPort()).setName("lcd")
+    // val lcd_interface = out(SpiLcdPort()).setName("lcd")
     val leds = out(UInt (6 bits))
     val tm = master(TMPort())
+    val ds1302 = master(DSPort())
   }
 
   // or else .cst requires a `io_` prefix.
@@ -37,19 +38,15 @@ class Testspinal extends Component {
 //  val oscClockDomain = OscClockDomain(100, io.reset_button);
   new ClockingArea(clk) {
     new SlowArea(100 kHz) {
-      SpiLcdST7789(io.lcd_interface)
-      TM1637(io.tm, io.leds(0), tclock)
-      RealClock(tclock)
-
-      io.leds(4 downto 1) <> tclock.rt4
+      // SpiLcdST7789(io.lcd_interface)
+      TM1637(io.tm, tclock)
+      // RealClock(tclock)
+      DS1302(io.ds1302, tclock)
+      io.leds(3 downto 0) <> ~tclock.rt4
     }
   }
-//  new SlowArea(100) {
-//    SpiLcdST7789(io.lcd_interface)
-//    TM1637(io.tm, io.leds(0))
-//  }
-
-  io.leds(5 downto 1) := U"5'b11111"
+  // io.leds(5 downto 4) := U"6'b111111"
+  io.leds(5 downto 4) := U("2'b11")
 }
 
 // Run this main to generate the RTL
