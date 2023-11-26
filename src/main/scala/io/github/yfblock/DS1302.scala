@@ -52,8 +52,8 @@ class DS1302 extends Component {
     io.port.dat := dio.write
   }
 
-  val STEP     = Reg(UInt(4 bits)) init (0)
-  val bit_loop = Reg(UInt(3 bits)) init (0)
+  val stateCounter     = Reg(UInt(4 bits)) init (0)
+  val bitIndex = Reg(UInt(3 bits)) init (0)
 
   val ADDRESS = U(0x81, 8 bits)
   val DATA    = Reg(UInt(8 bits)) init (0)
@@ -64,7 +64,7 @@ class DS1302 extends Component {
     setEntry(START)
 
     START
-      .onEntry(STEP := 0)
+      .onEntry(stateCounter := 0)
       .whenIsActive {
         io.port.rst := True
         goto(WRITE_ADDRESS)
@@ -73,22 +73,22 @@ class DS1302 extends Component {
 
     WRITE_ADDRESS
       .onEntry {
-        STEP     := 0
-        bit_loop := 0
+        stateCounter     := 0
+        bitIndex := 0
       }
       .whenIsActive {
-        STEP := STEP + 1
-        switch(STEP) {
+        stateCounter := stateCounter + 1
+        switch(stateCounter) {
           is(0) {
-            // io.port.dat := ADDRESS(bit_loop.resized)
-            dio.write := ADDRESS(bit_loop.resized)
+            // io.port.dat := ADDRESS(bitIndex.resized)
+            dio.write := ADDRESS(bitIndex.resized)
           }
           is(1)(io.port.clk := True)
           is(2) {
-            STEP        := 0
-            bit_loop    := bit_loop + 1
+            stateCounter        := 0
+            bitIndex    := bitIndex + 1
             io.port.clk := False
-            when(bit_loop === 7) {
+            when(bitIndex === 7) {
               dio.writeEnable := False
               goto(READ)
             }
@@ -99,21 +99,21 @@ class DS1302 extends Component {
 
     READ
       .onEntry {
-        STEP     := 0
-        bit_loop := 0
+        stateCounter     := 0
+        bitIndex := 0
       }
       .whenIsActive {
-        STEP := STEP + 1
-        switch(STEP) {
+        stateCounter := stateCounter + 1
+        switch(stateCounter) {
           is(0) {
-            DATA(bit_loop.resized) := dio.read
+            DATA(bitIndex.resized) := dio.read
           }
           is(1)(io.port.clk := True)
           is(2) {
-            STEP        := 0
-            bit_loop    := bit_loop + 1
+            stateCounter        := 0
+            bitIndex    := bitIndex + 1
             io.port.clk := False
-            when(bit_loop === 7) {
+            when(bitIndex === 7) {
               dio.writeEnable := True
               goto(END)
             }
@@ -124,8 +124,8 @@ class DS1302 extends Component {
 
     END
       .onEntry {
-        STEP     := 0
-        bit_loop := 0
+        stateCounter     := 0
+        bitIndex := 0
       }
       .whenIsActive {
         io.tm.rt4   := DATA(3 downto 0)
