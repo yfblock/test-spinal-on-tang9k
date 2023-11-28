@@ -57,12 +57,13 @@ class DS1302 extends Component {
 
   // val ADDRESS = U(0x81, 8 bits)
   // val ADDRESS = U("1000_0011")
-  val ADDRESS = U(0x81, 8 bits)
+  val ADDRESS  = U(0x81, 8 bits)
   val MADDRESS = U(0x83, 8 bits)
-  val DATA    = Reg(UInt(8 bits)) init (0)
+  val DATA     = Reg(UInt(8 bits)) init (0)
 
   val state = new StateMachine {
-    val START, WRITE_ADDRESS, READ, END, MSTART, MADDR, MREAD, MEND, IDLE = new State
+    val START, WRITE_ADDRESS, READ, END, MSTART, MADDR, MREAD, MEND, IDLE =
+      new State
 
     setEntry(START)
 
@@ -97,6 +98,7 @@ class DS1302 extends Component {
           }
         }
       }
+
     READ
       .onEntry {
         stateCounter := 0
@@ -107,9 +109,9 @@ class DS1302 extends Component {
         switch(stateCounter) {
           /// TIPS: between clk low and read there has a small interval
           is(1)(DATA(bitIndex.resized) := dio.read)
-          is(2)(io.port.clk := True)
-          is(3)(io.port.clk := False)
+          is(2)(io.port.clk            := True)
           is(4) {
+            io.port.clk  := False
             stateCounter := 0
             bitIndex     := bitIndex + 1
             when(bitIndex === 7) {
@@ -129,8 +131,8 @@ class DS1302 extends Component {
         stateCounter := stateCounter + 1
         switch(stateCounter) {
           is(0) {
-            io.tm.rt4   := DATA(3 downto 0)
-            io.tm.rt3   := DATA(6 downto 4).resized
+            io.tm.rt4 := DATA(3 downto 0)
+            io.tm.rt3 := DATA(6 downto 4).resized
             // io.tm.rt1   := 4
             io.port.rst := False
           }
@@ -171,6 +173,7 @@ class DS1302 extends Component {
           }
         }
       }
+
     MREAD
       .onEntry {
         stateCounter := 0
@@ -181,10 +184,10 @@ class DS1302 extends Component {
         switch(stateCounter) {
           /// TIPS: between clk low and read there has a small interval
           is(1)(DATA(bitIndex.resized) := dio.read)
-          is(2)(io.port.clk := True)
-          is(3)(io.port.clk := False)
+          is(2)(io.port.clk            := True)
           is(4) {
             stateCounter := 0
+            io.port.clk  := False
             bitIndex     := bitIndex + 1
             when(bitIndex === 7) {
               dio.writeEnable := True
@@ -203,8 +206,8 @@ class DS1302 extends Component {
         stateCounter := stateCounter + 1
         switch(stateCounter) {
           is(0) {
-            io.tm.rt2   := DATA(3 downto 0)
-            io.tm.rt1   := DATA(6 downto 4).resized
+            io.tm.rt2 := DATA(3 downto 0)
+            io.tm.rt1 := DATA(6 downto 4).resized
             // io.tm.rt1   := 4
             io.port.rst := False
           }
@@ -214,13 +217,10 @@ class DS1302 extends Component {
         }
       }
 
-
     IDLE
       .onEntry(stateCounter := 0)
       .whenIsActive {
         goto(START)
-    }
+      }
   }
-
-  report(f"This state is ${state.stateReg}")
 }
