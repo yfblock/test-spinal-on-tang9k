@@ -52,92 +52,175 @@ class DS1302 extends Component {
     io.port.dat := dio.write
   }
 
-  val stateCounter     = Reg(UInt(4 bits)) init (0)
-  val bitIndex = Reg(UInt(3 bits)) init (0)
+  val stateCounter = Reg(UInt(4 bits)) init (0)
+  val bitIndex     = Reg(UInt(3 bits)) init (0)
 
+  // val ADDRESS = U(0x81, 8 bits)
+  // val ADDRESS = U("1000_0011")
   val ADDRESS = U(0x81, 8 bits)
+  val MADDRESS = U(0x83, 8 bits)
   val DATA    = Reg(UInt(8 bits)) init (0)
 
-  new StateMachine {
-    val START, WRITE_ADDRESS, READ, END, IDLE = new State
+  val state = new StateMachine {
+    val START, WRITE_ADDRESS, READ, END, MSTART, MADDR, MREAD, MEND, IDLE = new State
 
     setEntry(START)
 
     START
       .onEntry(stateCounter := 0)
       .whenIsActive {
+        io.port.clk := False
         io.port.rst := True
         goto(WRITE_ADDRESS)
-        io.tm.rt1 := 1
       }
 
     WRITE_ADDRESS
       .onEntry {
-        stateCounter     := 0
-        bitIndex := 0
+        stateCounter := 0
+        bitIndex     := 0
       }
       .whenIsActive {
         stateCounter := stateCounter + 1
         switch(stateCounter) {
           is(0) {
-            // io.port.dat := ADDRESS(bitIndex.resized)
             dio.write := ADDRESS(bitIndex.resized)
           }
           is(1)(io.port.clk := True)
-          is(2) {
-            stateCounter        := 0
-            bitIndex    := bitIndex + 1
-            io.port.clk := False
+          is(3) {
+            stateCounter := 0
+            bitIndex     := bitIndex + 1
+            io.port.clk  := False
             when(bitIndex === 7) {
               dio.writeEnable := False
               goto(READ)
             }
           }
         }
-        io.tm.rt1 := 2
       }
-
     READ
       .onEntry {
-        stateCounter     := 0
-        bitIndex := 0
+        stateCounter := 0
+        bitIndex     := 0
       }
       .whenIsActive {
         stateCounter := stateCounter + 1
         switch(stateCounter) {
-          is(0) {
-            DATA(bitIndex.resized) := dio.read
-          }
-          is(1)(io.port.clk := True)
-          is(2) {
-            stateCounter        := 0
-            bitIndex    := bitIndex + 1
-            io.port.clk := False
+          /// TIPS: between clk low and read there has a small interval
+          is(1)(DATA(bitIndex.resized) := dio.read)
+          is(2)(io.port.clk := True)
+          is(3)(io.port.clk := False)
+          is(4) {
+            stateCounter := 0
+            bitIndex     := bitIndex + 1
             when(bitIndex === 7) {
               dio.writeEnable := True
               goto(END)
             }
           }
         }
-        io.tm.rt1 := 3
       }
 
     END
       .onEntry {
-        stateCounter     := 0
-        bitIndex := 0
+        stateCounter := 0
+        bitIndex     := 0
       }
       .whenIsActive {
-        io.tm.rt4   := DATA(3 downto 0)
-        io.tm.rt3   := DATA(6 downto 4).resized
-        io.tm.rt2   := DATA(7).asUInt.resized
-        io.port.rst := False
-        io.tm.rt1   := 4
-        goto(IDLE)
+        stateCounter := stateCounter + 1
+        switch(stateCounter) {
+          is(0) {
+            io.tm.rt4   := DATA(3 downto 0)
+            io.tm.rt3   := DATA(6 downto 4).resized
+            // io.tm.rt1   := 4
+            io.port.rst := False
+          }
+          is(1)(dio.write := False)
+          is(2)(dio.write := True)
+          is(4)(goto(MSTART))
+        }
       }
 
-    IDLE.whenIsActive {
-    //   goto(START)
+    MSTART
+      .onEntry(stateCounter := 0)
+      .whenIsActive {
+        io.port.clk := False
+        io.port.rst := True
+        goto(MADDR)
+      }
+
+    MADDR
+      .onEntry {
+        stateCounter := 0
+        bitIndex     := 0
+      }
+      .whenIsActive {
+        stateCounter := stateCounter + 1
+        switch(stateCounter) {
+          is(0) {
+            dio.write := MADDRESS(bitIndex.resized)
+          }
+          is(1)(io.port.clk := True)
+          is(3) {
+            stateCounter := 0
+            bitIndex     := bitIndex + 1
+            io.port.clk  := False
+            when(bitIndex === 7) {
+              dio.writeEnable := False
+              goto(MREAD)
+            }
+          }
+        }
+      }
+    MREAD
+      .onEntry {
+        stateCounter := 0
+        bitIndex     := 0
+      }
+      .whenIsActive {
+        stateCounter := stateCounter + 1
+        switch(stateCounter) {
+          /// TIPS: between clk low and read there has a small interval
+          is(1)(DATA(bitIndex.resized) := dio.read)
+          is(2)(io.port.clk := True)
+          is(3)(io.port.clk := False)
+          is(4) {
+            stateCounter := 0
+            bitIndex     := bitIndex + 1
+            when(bitIndex === 7) {
+              dio.writeEnable := True
+              goto(MEND)
+            }
+          }
+        }
+      }
+
+    MEND
+      .onEntry {
+        stateCounter := 0
+        bitIndex     := 0
+      }
+      .whenIsActive {
+        stateCounter := stateCounter + 1
+        switch(stateCounter) {
+          is(0) {
+            io.tm.rt2   := DATA(3 downto 0)
+            io.tm.rt1   := DATA(6 downto 4).resized
+            // io.tm.rt1   := 4
+            io.port.rst := False
+          }
+          is(1)(dio.write := False)
+          is(2)(dio.write := True)
+          is(4)(goto(IDLE))
+        }
+      }
+
+
+    IDLE
+      .onEntry(stateCounter := 0)
+      .whenIsActive {
+        goto(START)
     }
   }
+
+  report(f"This state is ${state.stateReg}")
 }

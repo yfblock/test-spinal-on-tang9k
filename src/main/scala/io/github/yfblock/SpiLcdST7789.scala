@@ -7,10 +7,10 @@ import scala.language.postfixOps
 
 case class SpiLcdPort() extends Bundle {
   val resetn = out(Bool());
-  val clk = out(Bool());
-  val cs = out(Bool());
-  val rs = out(Bool());
-  val data = out(Bool());
+  val clk    = out(Bool());
+  val cs     = out(Bool());
+  val rs     = out(Bool());
+  val data   = out(Bool());
 }
 
 object SpiLcdST7789 {
