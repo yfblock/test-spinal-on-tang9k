@@ -20,15 +20,17 @@ import scala.language.postfixOps
 // https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/docs/datasheet/unit/Unit%208Encoder/I2C%20timing%20diagram.pdf
 case class TMPort() extends Bundle with IMasterSlave {
   val clk = Bool()
-  val dio = Analog(Bool())
+  val dio = TriState(Bool())
 
   override def asMaster(): Unit = {
     out(clk)
-    inout(dio)
+    master(dio)
   }
 
   override def setAsReg(): TMPort.this.type = {
     this.clk.setAsReg().init(True)
+    this.dio.write.setAsReg().init(True)
+    this.dio.writeEnable.setAsReg().init(True)
     this
   }
 }
@@ -97,131 +99,124 @@ class TM1637 extends Component {
     // val restart = in(Reg(Bool)).init(False)
     val display = in(TimeDisplay())
   }
+  
+  val tm1637 = new Area {
+    noIoPrefix()
+    val bit_loop = Reg(UInt(4 bits)) init (0);
+    val STEP     = Reg(UInt(3 bits)) init (0);
 
-  val dio = TriState(Bool()).setAsReg()
-  dio.write.init(True)
-  dio.writeEnable.init(True)
+    val COMMAND_GROUP = Vec(
+      TMData(B"8'b10001111"),
+      TMData(B"8'b01000000"),
+      TMData(B"8'b11000000", True),
+      TMData.display(io.display.rt1.resized, dot = False, continue = True),
+      TMData.display(io.display.rt2.resized, dot = True, continue = True),
+      TMData.display(io.display.rt3.resized, dot = False, continue = True),
+      TMData.display(io.display.rt4.resized, dot = False)
+    )
 
-  dio.read := io.port.dio
-  when(dio.writeEnable) {
-    io.port.dio := dio.write
-  }
+    val COMMAND_INDEX = Reg(UInt(4 bits)) init (0)
+    new StateMachine {
+      val START, COMMAND1, ACK, END, IDLE = new State
 
-  noIoPrefix()
-  val bit_loop = Reg(UInt(4 bits)) init (0);
-  val STEP     = Reg(UInt(3 bits)) init (0);
+      setEntry(START)
 
-  val COMMAND_GROUP = Vec(
-    TMData(B"8'b10001111"),
-    TMData(B"8'b01000000"),
-    TMData(B"8'b11000000", True),
-    TMData.display(io.display.rt1.resized, dot = False, continue = True),
-    TMData.display(io.display.rt2.resized, dot = True, continue = True),
-    TMData.display(io.display.rt3.resized, dot = False, continue = True),
-    TMData.display(io.display.rt4.resized, dot = False)
-  )
-
-  // val COMMAND_GROUP = Vec(U"9'b010001111", U"9'b001000000", U"9'b111000000", U"9'b111111111", U"9'b111111111", U"9'b111111111", U"9'b011111111")
-  val COMMAND_INDEX = Reg(UInt(4 bits)) init (0)
-  new StateMachine {
-    val START, COMMAND1, ACK, END, IDLE = new State
-
-    setEntry(START)
-
-    START
-      .onEntry(STEP := 0)
-      .whenIsActive {
-        io.port.clk := True
-        dio.write   := True
-        STEP        := STEP + 1
-        when(STEP === 5) {
-          dio.write := False
-          goto(COMMAND1)
+      START
+        .onEntry(STEP := 0)
+        .whenIsActive {
+          io.port.clk := True
+          io.port.dio.write   := True
+          STEP        := STEP + 1
+          when(STEP === 5) {
+            io.port.dio.write := False
+            goto(COMMAND1)
+          }
         }
-      }
 
-    COMMAND1
-      .onEntry {
-        STEP     := 0
-        bit_loop := 0
-      }
-      .whenIsActive {
+      COMMAND1
+        .onEntry {
+          STEP     := 0
+          bit_loop := 0
+        }
+        .whenIsActive {
+          STEP := STEP + 1
+          switch(STEP) {
+            is(0) {
+              io.port.clk := False
+            }
+            is(1) {
+              io.port.dio.write := COMMAND_GROUP(COMMAND_INDEX.resized)(bit_loop.resized)
+              bit_loop  := bit_loop + 1
+            }
+            is(2) {
+              io.port.clk := True
+            }
+            is(3) {
+              STEP := 0
+              when(bit_loop === 8) {
+                goto(ACK)
+              }
+            }
+          }
+        }
+        .onExit(bit_loop := 0)
+
+      ACK.onEntry(STEP := 0).whenIsActive {
         STEP := STEP + 1
         switch(STEP) {
           is(0) {
             io.port.clk := False
           }
           is(1) {
-            dio.write := COMMAND_GROUP(COMMAND_INDEX.resized)(bit_loop.resized)
-            bit_loop  := bit_loop + 1
+            io.port.clk := True
+            when(io.port.dio.read === True) {
+              STEP := STEP
+            }
           }
           is(2) {
-            io.port.clk := True
-          }
-          is(3) {
-            STEP := 0
-            when(bit_loop === 8) {
-              goto(ACK)
-            }
-          }
-        }
-      }
-      .onExit(bit_loop := 0)
-
-    ACK.onEntry(STEP := 0).whenIsActive {
-      STEP := STEP + 1
-      switch(STEP) {
-        is(0) {
-          io.port.clk := False
-        }
-        is(1) {
-          io.port.clk := True
-          when(dio.read === True) {
-            STEP := STEP
-          }
-        }
-        is(2) {
-          COMMAND_INDEX := COMMAND_INDEX + 1
-          io.port.clk   := False
-          when(COMMAND_GROUP(COMMAND_INDEX.resized)(8)) {
-            goto(COMMAND1)
-          } otherwise {
-            goto(END)
-          }
-        }
-      }
-    }
-
-    END
-      .onEntry(
-        STEP := 0
-      )
-      .whenIsActive {
-        STEP := STEP + 1
-        switch(STEP) {
-          is(0)(io.port.clk := False)
-          is(1)(dio.write   := False)
-          is(2)(io.port.clk := True)
-          is(3) {
-            dio.write := True
-            when(COMMAND_INDEX === COMMAND_GROUP.length) {
-              goto(IDLE)
+            COMMAND_INDEX := COMMAND_INDEX + 1
+            io.port.clk   := False
+            when(COMMAND_GROUP(COMMAND_INDEX.resized)(8)) {
+              goto(COMMAND1)
             } otherwise {
-              goto(START)
+              goto(END)
             }
           }
         }
       }
 
-    IDLE
-      .onEntry(
-        STEP := 0
-      )
-      .whenIsActive {
-        COMMAND_INDEX := 0
-        goto(START)
-      }
+      END
+        .onEntry(
+          STEP := 0
+        )
+        .whenIsActive {
+          STEP := STEP + 1
+          switch(STEP) {
+            is(0)(io.port.clk := False)
+            is(1)(io.port.dio.write   := False)
+            is(2)(io.port.clk := True)
+            is(3) {
+              io.port.dio.write := True
+              when(COMMAND_INDEX === COMMAND_GROUP.length) {
+                goto(IDLE)
+              } otherwise {
+                goto(START)
+              }
+            }
+          }
+        }
 
-    setEncoding(SpinalEnumEncoding(id => id))
+      IDLE
+        .onEntry(
+          STEP := 0
+        )
+        .whenIsActive {
+          COMMAND_INDEX := 0
+          goto(START)
+        }
+
+      // setEncoding(SpinalEnumEncoding(id => id))
+      setEncoding(binaryOneHot)
+    }
   }
 }

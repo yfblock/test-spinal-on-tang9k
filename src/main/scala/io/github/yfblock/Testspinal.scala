@@ -7,6 +7,7 @@ import spinal.core.sim._
 import spinal.lib.master
 
 import scala.language.postfixOps
+import spinal.lib.io.InOutWrapper
 
 class Testspinal extends Component {
   val io = new Bundle {
@@ -53,13 +54,13 @@ class Testspinal extends Component {
 object Main {
   def main(args: Array[String]): Unit = {
     new java.io.File("rtl").mkdirs
-    SpinalConfig(targetDirectory = "rtl").generateVerilog(new Testspinal)
+    SpinalConfig(targetDirectory = "rtl").generateVerilog(InOutWrapper(new Testspinal))
   }
 }
 
 object TestSpinalSim {
   def main(args: Array[String]) {
-    SimConfig.withWave.doSim(new Testspinal) { dut =>
+    SimConfig.withWave.doSim(InOutWrapper(new Testspinal)) { dut =>
       val clk = ClockDomain(
         clock = dut.io.xtal_in,
         reset = dut.io.reset_button,
