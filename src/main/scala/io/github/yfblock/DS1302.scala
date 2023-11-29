@@ -46,176 +46,81 @@ class DS1302 extends Component {
   noIoPrefix()
 
   val ds1302 = new Area {
-    val stateCounter = Reg(UInt(4 bits)) init (0)
+    val stateCounter = Reg(UInt(2 bits)) init (0)
     val bitIndex     = Reg(UInt(3 bits)) init (0)
 
-    val ADDRESS  = U(0x81, 8 bits)
-    val MADDRESS = U(0x83, 8 bits)
-    val DATA     = Reg(UInt(8 bits)) init (0)
+    val DATA    = Reg(UInt(8 bits)) init (0)
+    val tmIndex = Reg(UInt(8 bits)) init (0)
+    val ADDRESS = tmIndex |<< 1 | U(0x81, 8 bits)
 
     val state = new StateMachine {
-      val START, WRITE_ADDRESS, READ, END, MSTART, MADDR, MREAD, MEND, IDLE =
-        new State
+      val START, WRITE_ADDRESS, READ, END = new State
 
       setEntry(START)
 
       START
-        .onEntry(stateCounter := 0)
         .whenIsActive {
-          io.port.clk := False
-          io.port.rst := True
+          stateCounter := 0
+          io.port.clk  := False
+          io.port.rst  := True
           goto(WRITE_ADDRESS)
         }
 
       WRITE_ADDRESS
         .onEntry {
-          stateCounter := 0
-          bitIndex     := 0
+          bitIndex := 0
         }
         .whenIsActive {
-          stateCounter := stateCounter + 1
-          switch(stateCounter) {
-            is(0) {
-              io.port.dat.write := ADDRESS(bitIndex.resized)
-            }
-            is(1)(io.port.clk := True)
-            is(3) {
-              stateCounter := 0
-              bitIndex     := bitIndex + 1
-              io.port.clk  := False
-              when(bitIndex === 7) {
-                io.port.dat.writeEnable := False
-                goto(READ)
-              }
+          stateCounter      := stateCounter + 1
+          io.port.dat.write := ADDRESS(bitIndex.resized)
+          when(stateCounter === 1) {
+            io.port.clk := True
+          } elsewhen (stateCounter === 3) {
+            bitIndex    := bitIndex + 1
+            io.port.clk := False
+            when(bitIndex === 7) {
+              io.port.dat.writeEnable := False
+              goto(READ)
             }
           }
         }
 
       READ
-        .onEntry {
-          stateCounter := 0
-          bitIndex     := 0
-        }
         .whenIsActive {
-          stateCounter := stateCounter + 1
-          switch(stateCounter) {
-            /// TIPS: between clk low and read there has a small interval
-            is(1)(DATA(bitIndex.resized) := io.port.dat.read)
-            is(2)(io.port.clk            := True)
-            is(4) {
-              io.port.clk  := False
-              stateCounter := 0
-              bitIndex     := bitIndex + 1
-              when(bitIndex === 7) {
-                io.port.dat.writeEnable := True
-                goto(END)
-              }
+          stateCounter           := stateCounter + 1
+          DATA(bitIndex.resized) := io.port.dat.read
+          when(stateCounter === 2) {
+            io.port.clk := True
+            bitIndex    := bitIndex + 1
+            when(bitIndex === 7) {
+              io.port.dat.writeEnable := True
+              goto(END)
             }
+          } elsewhen (stateCounter === 3) {
+            io.port.clk := False
           }
         }
 
       END
-        .onEntry {
-          stateCounter := 0
-          bitIndex     := 0
-        }
         .whenIsActive {
-          stateCounter := stateCounter + 1
-          switch(stateCounter) {
+          io.port.rst := False
+          switch(tmIndex) {
             is(0) {
               io.tm.rt4 := DATA(3 downto 0)
               io.tm.rt3 := DATA(6 downto 4).resized
-              io.port.rst := False
+              tmIndex   := 1
             }
-            is(1)(io.port.dat.write := False)
-            is(2)(io.port.dat.write := True)
-            is(4)(goto(MSTART))
-          }
-        }
-
-      MSTART
-        .onEntry(stateCounter := 0)
-        .whenIsActive {
-          io.port.clk := False
-          io.port.rst := True
-          goto(MADDR)
-        }
-
-      MADDR
-        .onEntry {
-          stateCounter := 0
-          bitIndex     := 0
-        }
-        .whenIsActive {
-          stateCounter := stateCounter + 1
-          switch(stateCounter) {
-            is(0) {
-              io.port.dat.write := MADDRESS(bitIndex.resized)
-            }
-            is(1)(io.port.clk := True)
-            is(3) {
-              stateCounter := 0
-              bitIndex     := bitIndex + 1
-              io.port.clk  := False
-              when(bitIndex === 7) {
-                io.port.dat.writeEnable := False
-                goto(MREAD)
-              }
-            }
-          }
-        }
-
-      MREAD
-        .onEntry {
-          stateCounter := 0
-          bitIndex     := 0
-        }
-        .whenIsActive {
-          stateCounter := stateCounter + 1
-          switch(stateCounter) {
-            /// TIPS: between clk low and read there has a small interval
-            is(1)(DATA(bitIndex.resized) := io.port.dat.read)
-            is(2)(io.port.clk            := True)
-            is(4) {
-              stateCounter := 0
-              io.port.clk  := False
-              bitIndex     := bitIndex + 1
-              when(bitIndex === 7) {
-                io.port.dat.writeEnable := True
-                goto(MEND)
-              }
-            }
-          }
-        }
-
-      MEND
-        .onEntry {
-          stateCounter := 0
-          bitIndex     := 0
-        }
-        .whenIsActive {
-          stateCounter := stateCounter + 1
-          switch(stateCounter) {
-            is(0) {
+            is(1) {
               io.tm.rt2 := DATA(3 downto 0)
               io.tm.rt1 := DATA(6 downto 4).resized
-              // io.tm.rt1   := 4
-              io.port.rst := False
+              tmIndex   := 0
             }
-            is(1)(io.port.dat.write := False)
-            is(2)(io.port.dat.write := True)
-            is(4)(goto(IDLE))
+            default(tmIndex := 0)
           }
-        }
-
-      IDLE
-        .onEntry(stateCounter := 0)
-        .whenIsActive {
           goto(START)
         }
 
       setEncoding(binaryOneHot)
     }
-
   }
 }
