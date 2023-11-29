@@ -106,7 +106,7 @@ class TM1637 extends Component {
     val step    = Reg(UInt(2 bits)) init (0);
 
     val CommandGroup = Vec(
-      TMData(B"8'b10001111"),
+      TMData(B"8'b10001010"),
       TMData(B"8'b01000000"),
       TMData(B"8'b11000000", True),
       TMData.display(io.display.rt1.resized, dot = False, continue = True),

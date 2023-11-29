@@ -18,6 +18,7 @@ class Testspinal extends Component {
     val leds = out(UInt (6 bits))
     val tm = master(TMPort())
     val ds1302 = master(DSPort())
+    val tm1638 = master(TM1638Port())
   }
 
   // or else .cst requires a `io_` prefix.
@@ -43,6 +44,7 @@ class Testspinal extends Component {
       TM1637(io.tm, tclock)
       // RealClock(tclock)
       DS1302(io.ds1302, tclock)
+      TM1638(io.tm1638, tclock)
       io.leds(3 downto 0) <> ~tclock.rt4
     }
   }
