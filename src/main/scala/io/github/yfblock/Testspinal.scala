@@ -24,7 +24,7 @@ class Testspinal extends Component {
   // or else .cst requires a `io_` prefix.
   noIoPrefix()
 
-  val tclock = TimeDisplay()
+  val ds = DataStore()
 
   val clk = ClockDomain(
     clock = io.xtal_in,
@@ -39,24 +39,24 @@ class Testspinal extends Component {
 
 //  val oscClockDomain = OscClockDomain(100, io.reset_button);
   new ClockingArea(clk) {
-    new SlowArea(100 kHz) {
+    new SlowArea(500 kHz) {
       // SpiLcdST7789(io.lcd_interface)
-      TM1637(io.tm, tclock)
+      TM1637(io.tm, ds)
       // RealClock(tclock)
-      DS1302(io.ds1302, tclock)
-      TM1638(io.tm1638, tclock)
-      io.leds(3 downto 0) <> ~tclock.rt4
+      DS1302(io.ds1302, ds)
+      TM1638(io.tm1638, ds)
+      // io.leds(3 downto 0) <> ~tclock.rt4
     }
   }
-  // io.leds(5 downto 4) := U"6'b111111"
-  io.leds(5 downto 4) := U("2'b11")
+  io.leds := U"6'b111111"
+  // io.leds(5 downto 1) := U("5'b11111")
 }
 
 // Run this main to generate the RTL
 object Main {
   def main(args: Array[String]): Unit = {
     new java.io.File("rtl").mkdirs
-    SpinalConfig(targetDirectory = "rtl").generateVerilog(InOutWrapper(new Testspinal))
+    SpinalConfig(targetDirectory = "rtl", anonymSignalPrefix = "tmp").generateVerilog(InOutWrapper(new Testspinal))
   }
 }
 

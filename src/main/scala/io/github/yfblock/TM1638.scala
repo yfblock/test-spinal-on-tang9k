@@ -4,6 +4,7 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.io.TriState
 import spinal.lib.fsm._
+import org.jline.console.impl.Builtins.Command
 
 case class TM1638Port() extends Bundle with IMasterSlave {
   val stb = Bool()
@@ -26,10 +27,17 @@ case class TM1638Port() extends Bundle with IMasterSlave {
 }
 
 object TM1638 {
-  def apply(port: TM1638Port, td: TimeDisplay): TM1638 = {
+  def apply(port: TM1638Port, ds: DataStore): TM1638 = {
     val tm1638 = new TM1638()
     port <> tm1638.io.port
-    td <> tm1638.io.display
+    tm1638.io.display(0) := ds.getYear1.resized
+    tm1638.io.display(1) := ds.getYear0
+    tm1638.io.display(2) := ds.getMonth1.resized
+    tm1638.io.display(3) := ds.getMonth0
+    tm1638.io.display(4) := ds.getDay1.resized
+    tm1638.io.display(5) := ds.getDay0
+    tm1638.io.display(6) := ds.getHour1.resized
+    tm1638.io.display(7) := ds.getHour0
     tm1638
   }
 }
@@ -37,7 +45,8 @@ object TM1638 {
 class TM1638 extends Component {
   val io = new Bundle {
     val port    = master(TM1638Port()).setAsReg()
-    val display = in(TimeDisplay())
+    // val display = in(TimeDisplay())
+    val display = in(Vec.fill(8)(UInt(4 bits)))
   }
 
   val tm1637 = new Area {
@@ -49,17 +58,25 @@ class TM1638 extends Component {
       TMData(B"8'b10001001"),
       TMData(B"8'b01000000"),
       TMData(B"8'b11000000", True),
-      TMData.display(io.display.rt1.resized, dot = False, continue = True),
+      TMData.display(io.display(0).resized, False, True),
       TMData(B"8'b00000001", True),
-      TMData.display(io.display.rt2.resized, dot = False, continue = True),
+      TMData.display(io.display(1).resized, False, True),
       TMData(B"8'b00000001", True),
-      TMData.display(io.display.rt3.resized, dot = False, continue = True),
+      TMData.display(io.display(2).resized, False, True),
       TMData(B"8'b00000001", True),
-      TMData.display(io.display.rt4.resized, dot = False, continue = True),
+      TMData.display(io.display(3).resized, False, True),
+      TMData(B"8'b00000001", True),
+      TMData.display(io.display(4).resized, False, True),
+      TMData(B"8'b00000001", True),
+      TMData.display(io.display(5).resized, False, True),
+      TMData(B"8'b00000001", True),
+      TMData.display(io.display(6).resized, False, True),
+      TMData(B"8'b00000001", True),
+      TMData.display(io.display(7).resized, False, True),
       TMData(B"8'b00000000")
     )
 
-    val CommandIndex = Reg(UInt(4 bits)) init (0)
+    val CommandIndex = Reg(UInt(log2Up(CommandGroup.length) bits)) init (0)
 
     def is_continue(index: UInt): Bool = CommandGroup(index.resized)(8)
     def dio_write(index: UInt, bitIndex: UInt): Unit =
@@ -113,7 +130,7 @@ class TM1638 extends Component {
         }
 
       IDLE.whenCompleted {
-        when(CommandIndex === CommandGroup.length)(CommandIndex := 0)
+        when(CommandIndex === CommandGroup.length)(CommandIndex := 2)
         goto(START)
       }
 

@@ -55,11 +55,14 @@ case class TimeDisplay() extends Bundle {
 // ACK signal will turn DIO as LOW.
 object TM1637 {
 
-  def apply(port: TMPort, tm: TimeDisplay): TM1637 = {
-    val add1 = new TM1637()
-    port <> add1.io.port
-    add1.io.display <> tm
-    add1
+  def apply(port: TMPort, ds: DataStore): TM1637 = {
+    val tm1637 = new TM1637()
+    port <> tm1637.io.port
+    tm1637.io.displays(3) := ds.getSec0
+    tm1637.io.displays(2) := ds.getSec1.resized
+    tm1637.io.displays(1) := ds.getMin0
+    tm1637.io.displays(0) := ds.getMin1.resized
+    tm1637
   }
 }
 
@@ -97,7 +100,8 @@ class TM1637 extends Component {
   val io = new Bundle {
     val port = master(TMPort().setAsReg())
     // val restart = in(Reg(Bool)).init(False)
-    val display = in(TimeDisplay())
+    // val display = in(TimeDisplay())
+    val displays = in(Vec.fill(4)(UInt(4 bits)))
   }
 
   val tm1637 = new Area {
@@ -109,11 +113,15 @@ class TM1637 extends Component {
       TMData(B"8'b10001010"),
       TMData(B"8'b01000000"),
       TMData(B"8'b11000000", True),
-      TMData.display(io.display.rt1.resized, dot = False, continue = True),
-      TMData.display(io.display.rt2.resized, dot = True, continue = True),
-      TMData.display(io.display.rt3.resized, dot = False, continue = True),
-      TMData.display(io.display.rt4.resized, dot = False)
+      TMData.display(io.displays(0).resized, dot = False, continue = True),
+      TMData.display(io.displays(1).resized, dot = True, continue = True),
+      TMData.display(io.displays(2).resized, dot = False, continue = True),
+      TMData.display(io.displays(3).resized, dot = False)
     )
+
+    // for(i <- 0 until 4) {
+    //   CommandGroup :+ TMData.display(io.displays(i).resized, False, Bool(i == 3))
+    // }
 
     val CommandIndex = Reg(UInt(4 bits)) init (0)
     new StateMachine {
@@ -191,7 +199,7 @@ class TM1637 extends Component {
       IDLE
         .whenIsActive {
           when(CommandIndex === CommandGroup.length) {
-            CommandIndex := 0
+            CommandIndex := 2
           }
           goto(START)
         }
