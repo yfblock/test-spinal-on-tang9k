@@ -27,6 +27,13 @@ case class DSPort() extends Bundle with IMasterSlave {
   }
 }
 
+case class DSTimeBCD() extends Bundle {
+  val year = Vec(UInt(4 bits))
+  val month = Vec(UInt(1 bits), UInt(3 bits))
+  val date = Vec(UInt(2 bits), UInt(4 bits))
+  val days = UInt(3 bits)
+}
+
 object DS1302 {
   def apply(port: DSPort, tm: TimeDisplay): DS1302 = {
     val ds1302 = new DS1302();

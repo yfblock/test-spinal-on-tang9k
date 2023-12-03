@@ -46,19 +46,28 @@ class TM1638 extends Component {
     val step    = Reg(UInt(2 bits)) init (0);
 
     val CommandGroup = Vec(
-      TMData(B"8'b10001000"),
-      // TMData(B"8'b01000000"),
-      // TMData(B"8'b11000000", True),
-      // TMData.display(io.display.rt1.resized, dot = False, continue = True),
-      // TMData.display(io.display.rt2.resized, dot = True, continue = True),
-      // TMData.display(io.display.rt3.resized, dot = False, continue = True),
-      // TMData.display(io.display.rt4.resized, dot = False)
+      TMData(B"8'b10001001"),
+      TMData(B"8'b01000000"),
+      TMData(B"8'b11000000", True),
+      TMData.display(io.display.rt1.resized, dot = False, continue = True),
+      TMData(B"8'b00000001", True),
+      TMData.display(io.display.rt2.resized, dot = False, continue = True),
+      TMData(B"8'b00000001", True),
+      TMData.display(io.display.rt3.resized, dot = False, continue = True),
+      TMData(B"8'b00000001", True),
+      TMData.display(io.display.rt4.resized, dot = False, continue = True),
+      TMData(B"8'b00000000")
     )
 
     val CommandIndex = Reg(UInt(4 bits)) init (0)
+
+    def is_continue(index: UInt): Bool = CommandGroup(index.resized)(8)
+    def dio_write(index: UInt, bitIndex: UInt): Unit =
+      io.port.dio.write := CommandGroup(index.resized)(bitIndex.resized)
+
     new StateMachine {
-      val START, COMMAND1, WAIT, END = new State
-      val IDLE                       = new StateDelay(200)
+      val START, GAP, COMMAND1, WAIT, END = new State
+      val IDLE                            = new StateDelay(200)
 
       setEntry(START)
 
@@ -67,34 +76,34 @@ class TM1638 extends Component {
           io.port.clk       := True
           io.port.dio.write := True
           io.port.stb       := False
-          goto(COMMAND1)
+          goto(GAP)
         }
+
+      GAP.whenIsActive {
+        bitLoop := 0
+        goto(COMMAND1)
+      }
 
       COMMAND1
-        .onEntry(bitLoop := 0)
         .whenIsActive {
           step := step + 1
-          switch(step) {
-            is(0)(io.port.clk := False)
-            is(1) {
-              io.port.dio.write := CommandGroup(CommandIndex.resized)(
-                bitLoop.resized
-              )
+          when(step(0) === False) {
+            io.port.clk := step(1)
+          } otherwise {
+            when(step(1)) {
               bitLoop := bitLoop + 1
+              when(bitLoop === 7)(goto(WAIT))
+            } otherwise {
+              dio_write(CommandIndex, bitLoop)
             }
-            is(2)(io.port.clk := True)
-            is(3)(when(bitLoop === 8)(goto(WAIT)))
           }
         }
-        .onExit(bitLoop := 0)
 
       WAIT.whenIsActive {
-        // CommandIndex := CommandIndex + 1
-        when(CommandGroup(CommandIndex.resized)(8)) {
-          goto(COMMAND1)
-        } otherwise {
-          goto(END)
-        }
+        CommandIndex := CommandIndex + 1
+        when(is_continue(CommandIndex)) {
+          goto(GAP)
+        } otherwise (goto(END))
       }
 
       END
@@ -104,10 +113,8 @@ class TM1638 extends Component {
         }
 
       IDLE.whenCompleted {
-        when(CommandIndex === CommandGroup.length) {
-          CommandIndex := 0
-        }
-        // goto(START)
+        when(CommandIndex === CommandGroup.length)(CommandIndex := 0)
+        goto(START)
       }
 
       setEncoding(binaryOneHot)
