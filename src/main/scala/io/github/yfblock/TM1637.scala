@@ -30,7 +30,6 @@ case class TMPort() extends Bundle with IMasterSlave {
   override def setAsReg(): TMPort.this.type = {
     this.clk.setAsReg().init(True)
     this.dio.write.setAsReg().init(True)
-    this.dio.writeEnable.setAsReg().init(True)
     this
   }
 }
@@ -72,7 +71,11 @@ object TMData {
   }
 
   def display(num: UInt, dot: Bool, continue: Bool = False): Bits = {
-    continue ## dot ## B(
+    continue ## this.displayCore(num, dot)
+  }
+
+  def displayCore(num: UInt, dot: Bool): Bits = {
+    dot ## B(
       num.mux(
         0  -> B(0x3f, 7 bits),
         1  -> B(0x06, 7 bits),
@@ -90,7 +93,6 @@ object TMData {
         13 -> B(0x5e, 7 bits),
         14 -> B(0x79, 7 bits),
         15 -> B(0x71, 7 bits)
-        // default -> B(0x00, 7 bits)
       )
     )
   }
@@ -98,81 +100,107 @@ object TMData {
 
 class TM1637 extends Component {
   val io = new Bundle {
-    val port = master(TMPort().setAsReg())
-    // val restart = in(Reg(Bool)).init(False)
-    // val display = in(TimeDisplay())
+    val port     = master(TMPort().setAsReg())
     val displays = in(Vec.fill(4)(UInt(4 bits)))
   }
 
-  val tm1637 = new Area {
-    noIoPrefix()
-    val bitLoop = Reg(UInt(4 bits)) init (0);
-    val step    = Reg(UInt(2 bits)) init (0);
+  noIoPrefix()
+  io.port.dio.writeEnable := True
+  val bitLoop = Reg(UInt(4 bits)) init (0);
+  val step    = Reg(UInt(2 bits)) init (0);
 
-    val CommandGroup = Vec(
-      TMData(B"8'b10001010"),
-      TMData(B"8'b01000000"),
-      TMData(B"8'b11000000", True),
-      TMData.display(io.displays(0).resized, dot = False, continue = True),
-      TMData.display(io.displays(1).resized, dot = True, continue = True),
-      TMData.display(io.displays(2).resized, dot = False, continue = True),
-      TMData.display(io.displays(3).resized, dot = False)
-    )
+  val SHOW_DISPLAY = B"8'b10001001"
+  val INCRE_MODE   = B"8'b01000000"
+  val WRITE_DATA   = B"8'b11000000"
 
-    // for(i <- 0 until 4) {
-    //   CommandGroup :+ TMData.display(io.displays(i).resized, False, Bool(i == 3))
-    // }
+  val CommandGroup = Vec(
+    TMData(B"8'b10001010"),
+    TMData(B"8'b01000000"),
+    TMData(B"8'b11000000", True),
+    TMData.display(io.displays(0).resized, dot = False, continue = True),
+    TMData.display(io.displays(1).resized, dot = True, continue = True),
+    TMData.display(io.displays(2).resized, dot = False, continue = True),
+    TMData.display(io.displays(3).resized, dot = False)
+  )
 
-    val CommandIndex = Reg(UInt(4 bits)) init (0)
-    new StateMachine {
-      val START, COMMAND1, ACK, ACK1, ACK2, END, IDLE = new State
-      val DELAY                           = new StateDelay(5)
+  val CommandIndex = Reg(UInt(4 bits)) init (0)
 
-      setEntry(START)
+  new StateMachine {
+    val START = new State with EntryPoint {
+      whenIsActive {
+        io.port.clk       := True
+        io.port.dio.write := True
+        goto(DELAY)
+      }
+    }
 
-      START
-        .whenIsActive {
-          io.port.clk       := True
-          io.port.dio.write := True
-          goto(DELAY)
-        }
-
-      DELAY.whenCompleted {
+    val DELAY = new StateDelay(5) {
+      whenCompleted {
         io.port.dio.write := False
         goto(COMMAND1)
       }
+    }
 
-      COMMAND1
-        .onEntry(bitLoop := 0)
-        .whenIsActive {
-          step := step + 1
-          switch(step) {
-            is(0)(io.port.clk := False)
-            is(1) {
-              io.port.dio.write := CommandGroup(CommandIndex.resized)(
-                bitLoop.resized
-              )
-              bitLoop := bitLoop + 1
-            }
-            is(2)(io.port.clk := True)
-            is(3)(when(bitLoop === 8) (goto(ACK)))
+    val COMMAND1: State = new State {
+      onEntry(bitLoop := 0)
+      whenIsActive {
+        step := step + 1
+        switch(step) {
+          is(0)(io.port.clk := False)
+          is(1) {
+            io.port.dio.write := CommandGroup(CommandIndex.resized)(
+              bitLoop.resized
+            )
+            bitLoop := bitLoop + 1
           }
+          is(2)(io.port.clk := True)
+          is(3)(when(bitLoop === 8)(goto(ACK)))
         }
-        .onExit(bitLoop := 0)
+      }
+    }
 
-      ACK.whenIsActive {
+    // val ACK1 = new State {
+    //     whenIsActive {
+    //         step := step + 1
+    //         switch(step) {
+    //             is(0)(io.port.clk := False)
+    //             is(1) {
+    //                 io.port.dio.writeEnable := False
+    //                 io.port.clk := True
+    //                 when(io.port.dio.read)(step := step)
+    //             }
+    //             is(3) {
+    //                 io.port.clk  := False
+    //                 CommandIndex := CommandIndex + 1
+    //                 when(CommandGroup(CommandIndex.resized)(8)) {
+    //                     goto(COMMAND1)
+    //                 } otherwise {
+    //                     goto(END)
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    val ACK = new State {
+      whenIsActive {
         io.port.clk := False
         goto(ACK1)
       }
+    }
 
-      ACK1.whenIsActive {
+    val ACK1 = new State {
+      whenIsActive {
         io.port.clk := True
+        io.port.dio.writeEnable := False
         when(io.port.dio.read === False) {
           goto(ACK2)
         }
       }
+    }
 
-      ACK2.whenIsActive {
+    val ACK2 = new State {
+      whenIsActive {
         CommandIndex := CommandIndex + 1
         io.port.clk  := False
         when(CommandGroup(CommandIndex.resized)(8)) {
@@ -181,30 +209,30 @@ class TM1637 extends Component {
           goto(END)
         }
       }
-
-      END
-        .whenIsActive {
-          step := step + 1
-          switch(step) {
-            is(0)(io.port.clk       := False)
-            is(1)(io.port.dio.write := False)
-            is(2)(io.port.clk       := True)
-            is(3) {
-              io.port.dio.write := True
-              goto(IDLE)
-            }
-          }
-        }
-
-      IDLE
-        .whenIsActive {
-          when(CommandIndex === CommandGroup.length) {
-            CommandIndex := 2
-          }
-          goto(START)
-        }
-
-      setEncoding(binaryOneHot)
     }
+
+    val END = new State {
+      whenIsActive {
+        step := step + 1
+        switch(step) {
+          is(0)(io.port.clk       := False)
+          is(1)(io.port.dio.write := False)
+          is(2)(io.port.clk       := True)
+          is(3) {
+            io.port.dio.write := True
+            goto(IDLE)
+          }
+        }
+      }
+    }
+
+    val IDLE = new State {
+      whenIsActive {
+        when(CommandIndex === CommandGroup.length)(CommandIndex := 2)
+        goto(START)
+      }
+    }
+
+    setEncoding(binaryOneHot)
   }
 }

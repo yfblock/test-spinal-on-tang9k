@@ -21,7 +21,6 @@ case class TM1638Port() extends Bundle with IMasterSlave {
     this.stb.setAsReg().init(True)
     this.clk.setAsReg().init(True)
     this.dio.write.setAsReg().init(True)
-    this.dio.writeEnable.setAsReg().init(True)
     this
   }
 }
@@ -38,6 +37,7 @@ object TM1638 {
     tm1638.io.display(5) := ds.getDay0
     tm1638.io.display(6) := ds.getHour1.resized
     tm1638.io.display(7) := ds.getHour0
+    tm1638.io.leds       := tm1638.io.keys
     tm1638
   }
 }
@@ -45,97 +45,132 @@ object TM1638 {
 class TM1638 extends Component {
   val io = new Bundle {
     val port    = master(TM1638Port()).setAsReg()
-    // val display = in(TimeDisplay())
     val display = in(Vec.fill(8)(UInt(4 bits)))
+    val leds    = in(UInt(8 bits))
+    val keys    = out(UInt(8 bits)).setAsReg().init(0)
   }
 
-  val tm1637 = new Area {
-    noIoPrefix()
-    val bitLoop = Reg(UInt(4 bits)) init (0);
-    val step    = Reg(UInt(2 bits)) init (0);
+  io.port.dio.writeEnable := True
+  noIoPrefix()
+  val bitLoop = Reg(UInt(3 bits)) init (0);
+  val step    = Reg(UInt(2 bits)) init (0);
+  val dots    = Reg(UInt(8 bits)) init (0)
+  val rdatas  = Reg(Vec(UInt(8 bits), 4))
 
-    val CommandGroup = Vec(
-      TMData(B"8'b10001001"),
-      TMData(B"8'b01000000"),
-      TMData(B"8'b11000000", True),
-      TMData.display(io.display(0).resized, False, True),
-      TMData(B"8'b00000001", True),
-      TMData.display(io.display(1).resized, False, True),
-      TMData(B"8'b00000001", True),
-      TMData.display(io.display(2).resized, False, True),
-      TMData(B"8'b00000001", True),
-      TMData.display(io.display(3).resized, False, True),
-      TMData(B"8'b00000001", True),
-      TMData.display(io.display(4).resized, False, True),
-      TMData(B"8'b00000001", True),
-      TMData.display(io.display(5).resized, False, True),
-      TMData(B"8'b00000001", True),
-      TMData.display(io.display(6).resized, False, True),
-      TMData(B"8'b00000001", True),
-      TMData.display(io.display(7).resized, False, True),
-      TMData(B"8'b00000000")
-    )
+  val SHOW_DISPLAY = B"8'b10001001"
+  val INCRE_MODE   = B"8'b01000000"
+  val WRITE_DATA   = B"8'b11000000"
+  val READ_DATA    = B"8'b01000010"
 
-    val CommandIndex = Reg(UInt(log2Up(CommandGroup.length) bits)) init (0)
+  val COMMAND   = Reg(Bits(8 bits)) init (SHOW_DISPLAY)
+  val dataIndex = Reg(UInt(4 bits)) init (0)
+  val readIndex = Reg(UInt(2 bits)) init (0)
+  val DATA = Mux(
+    dataIndex(0),
+    B"7'h0" ## io.leds(dataIndex >> 1),
+    TMData.displayCore(io.display(dataIndex >> 1), False)
+  )
 
-    def is_continue(index: UInt): Bool = CommandGroup(index.resized)(8)
-    def dio_write(index: UInt, bitIndex: UInt): Unit =
-      io.port.dio.write := CommandGroup(index.resized)(bitIndex.resized)
+  for (i <- 0 until 4) {
+    // io.keys((i << 1))     := io.keys((i << 1)) | rdatas(i)(0)
+    // io.keys((i << 1) + 1) := io.keys((i << 1) + 1) | rdatas(i)(4)
+    io.keys(i)     := io.keys(i) | rdatas(i)(0)
+    io.keys(i + 4) := io.keys(i + 4) | rdatas(i)(4)
+  }
 
-    new StateMachine {
-      val START, GAP, COMMAND1, WAIT, END = new State
-      val IDLE                            = new StateDelay(200)
+  new StateMachine {
+    val START = new State with EntryPoint {
+      whenIsActive {
+        io.port.clk       := True
+        io.port.dio.write := True
+        io.port.stb       := False
+        goto(GAP)
+      }
+    }
 
-      setEntry(START)
-
-      START
-        .whenIsActive {
-          io.port.clk       := True
-          io.port.dio.write := True
-          io.port.stb       := False
-          goto(GAP)
-        }
-
-      GAP.whenIsActive {
-        bitLoop := 0
+    val GAP: State = new State {
+      whenIsActive {
+        bitLoop   := 0
+        dataIndex := 0
         goto(COMMAND1)
       }
+    }
 
-      COMMAND1
-        .whenIsActive {
-          step := step + 1
-          when(step(0) === False) {
-            io.port.clk := step(1)
-          } otherwise {
-            when(step(1)) {
-              bitLoop := bitLoop + 1
-              when(bitLoop === 7)(goto(WAIT))
-            } otherwise {
-              dio_write(CommandIndex, bitLoop)
+    val COMMAND1 = new State {
+      whenIsActive {
+        step := step + 1
+        switch(step) {
+          is(0, 2)(io.port.clk    := step(1))
+          is(1)(io.port.dio.write := COMMAND(bitLoop.resized))
+          is(3) {
+            bitLoop := bitLoop + 1
+            when(bitLoop === 7) {
+              when(COMMAND === WRITE_DATA) {
+                goto(WDATA)
+              } elsewhen (COMMAND === READ_DATA) {
+                goto(RDATA)
+              } otherwise {
+                goto(END)
+              }
             }
           }
         }
-
-      WAIT.whenIsActive {
-        CommandIndex := CommandIndex + 1
-        when(is_continue(CommandIndex)) {
-          goto(GAP)
-        } otherwise (goto(END))
       }
+    }
 
-      END
-        .whenIsActive {
-          io.port.stb := True
-          goto(IDLE)
+    val WDATA = new State {
+      whenIsActive {
+        step := step + 1
+        switch(step) {
+          is(0, 2)(io.port.clk    := step(1))
+          is(1)(io.port.dio.write := DATA(bitLoop))
+          is(3) {
+            bitLoop := bitLoop + 1
+            when(bitLoop === 7) {
+              dataIndex := dataIndex + 1
+              when(dataIndex === 15)(goto(END))
+            }
+          }
         }
+      }
+    }
 
-      IDLE.whenCompleted {
-        when(CommandIndex === CommandGroup.length)(CommandIndex := 2)
+    val RDATA = new State {
+      whenIsActive {
+        io.port.dio.writeEnable := False
+        step                    := step + 1
+        io.port.clk             := step(1)
+        when(step === 2) {
+          rdatas(readIndex)(bitLoop) := io.port.dio.read
+        } elsewhen (step === 3) {
+          bitLoop := bitLoop + 1
+          when(bitLoop === 7) {
+            readIndex := readIndex + 1
+            when(readIndex === 3)(goto(END))
+          }
+        }
+      }
+    }
+
+    val END = new State {
+      whenIsActive {
+        io.port.stb := True
+        goto(IDLE)
+      }
+    }
+
+    val IDLE = new StateDelay(200) {
+      whenCompleted {
+        COMMAND := COMMAND.mux(
+          SHOW_DISPLAY -> INCRE_MODE,
+          INCRE_MODE   -> WRITE_DATA,
+          WRITE_DATA   -> READ_DATA,
+          READ_DATA    -> WRITE_DATA,
+          default      -> WRITE_DATA
+        )
         goto(START)
       }
-
-      setEncoding(binaryOneHot)
     }
+    setEncoding(binaryOneHot)
   }
-
 }

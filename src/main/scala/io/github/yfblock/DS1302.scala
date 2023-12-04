@@ -38,14 +38,14 @@ case class DataStore() extends Bundle {
   def getMin1 = DATA(1)(6 downto 4)
   // TIPS: This only be used for 24 hours format
   def getHour0 = DATA(2)(3 downto 0)
-  def getHour1 = DATA(2)(4 downto 3)
-  
-  def getDay0 = DATA(3)(3 downto 0)
-  def getDay1 = DATA(3)(5 downto 4)
+  def getHour1 = DATA(2)(5 downto 4)
+
+  def getDay0   = DATA(3)(3 downto 0)
+  def getDay1   = DATA(3)(5 downto 4)
   def getMonth0 = DATA(4)(3 downto 0)
   def getMonth1 = DATA(4)(4 downto 4)
-  def getYear0 = DATA(6)(3 downto 0)
-  def getYear1 = DATA(6)(7 downto 4)
+  def getYear0  = DATA(6)(3 downto 0)
+  def getYear1  = DATA(6)(7 downto 4)
 }
 
 /// read date time through burst mode
