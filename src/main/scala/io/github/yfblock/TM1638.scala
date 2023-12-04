@@ -26,7 +26,7 @@ case class TM1638Port() extends Bundle with IMasterSlave {
 }
 
 object TM1638 {
-  def apply(port: TM1638Port, ds: DataStore): TM1638 = {
+  def apply(port: TM1638Port, ds: DataStore, leds: UInt, keys: UInt): TM1638 = {
     val tm1638 = new TM1638()
     port <> tm1638.io.port
     tm1638.io.display(0) := ds.getYear1.resized
@@ -37,7 +37,8 @@ object TM1638 {
     tm1638.io.display(5) := ds.getDay0
     tm1638.io.display(6) := ds.getHour1.resized
     tm1638.io.display(7) := ds.getHour0
-    tm1638.io.leds       := tm1638.io.keys
+    tm1638.io.leds <> leds
+    keys <> tm1638.io.keys
     tm1638
   }
 }

@@ -37,6 +37,11 @@ class Testspinal extends Component {
     )
   )
 
+  val tm1638_leds = UInt(8 bits)
+  val tm1638_keys = UInt(8 bits)
+  
+  tm1638_leds := tm1638_keys
+
 //  val oscClockDomain = OscClockDomain(100, io.reset_button);
   new ClockingArea(clk) {
     new SlowArea(500 kHz) {
@@ -44,8 +49,7 @@ class Testspinal extends Component {
       TM1637(io.tm, ds)
       // RealClock(tclock)
       DS1302(io.ds1302, ds)
-      TM1638(io.tm1638, ds)
-      // io.leds(3 downto 0) <> ~tclock.rt4
+      TM1638(io.tm1638, ds, tm1638_leds, tm1638_keys)
     }
   }
   io.leds := U"6'b111111"
