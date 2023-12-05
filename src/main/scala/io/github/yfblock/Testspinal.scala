@@ -9,6 +9,7 @@ import spinal.lib.master
 import scala.language.postfixOps
 import spinal.lib.io.InOutWrapper
 import spinal.lib.fsm._
+import spinal.lib
 
 class Testspinal extends Component {
   val io = new Bundle {
@@ -20,9 +21,9 @@ class Testspinal extends Component {
     val tm = master(TMPort())
     val ds1302 = master(DSPort())
     val tm1638 = master(TM1638Port())
-    val srf05 = master(SRF05Port())
+    // val srf05 = master(SRF05Port())
     val uart_tx = out Bool()
-    val uart_rx = out Bool()
+    val uart_rx = in(Bool())
   }
 
   noIoPrefix()
@@ -58,7 +59,10 @@ class Testspinal extends Component {
     tm1638Displays(i * 2 + 1) := 0
   }
 
+  val rxStream = lib.Stream(Bits(8 bits))
+  val txStream = lib.Stream(Bits(8 bits))
   new ClockingArea(clk) {
+    val asciiReg = Reg(Bits(8 bits)) init (0)
     new StateMachine {
       val START = new State {
         whenIsActive {
@@ -88,7 +92,12 @@ class Testspinal extends Component {
           tm1637Displays(2) := ds.getSec1.resized
           tm1637Displays(1) := ds.getMin0
           tm1637Displays(0) := ds.getMin1.resized
-
+          tm1638Displays(0) := asciiReg(3 downto 0).asUInt
+          tm1638Displays(1) := asciiReg(7 downto 4).asUInt
+          when(rxStream.valid) {
+            txStream.ready := True
+            asciiReg := rxStream.payload
+          }
           // for(i <- 0 until 4) {
           //   tm1638Displays(4 + i) := distance((16 - i * 4 - 1) downto (16 - (i + 1) * 4))
           // }
@@ -96,25 +105,37 @@ class Testspinal extends Component {
       }
     }
     // Uart Transmite
-    UartTx(io.uart_tx, tx_data, tx_en, is_busy)
     val datas = Vec("Hello\r\n".map(c => B(c.toInt, 8 bits)))
     val index = Reg(UInt(log2Up(datas.length) bits)).init(0)
 
-    tx_en := index < datas.length
-    when(~is_busy && index =/= datas.length)(index := index + 1)
-    tx_data := datas(index)
-
+    UartController(io.uart_rx, rxStream, io.uart_tx, txStream)
+    txStream.valid := False
+    txStream.payload := '4'
     new StateMachine {
+      val sendFinished = Reg(Bool()) init(False)
+
       val START: State = new State with EntryPoint {
         whenIsActive {
           when(tm1638_keys(3)) {
-            index := 0
             goto(END)
           }
         }
       }
 
       val END = new State {
+        whenIsActive {
+          txStream.valid := True
+          txStream.payload := datas(index)
+          when(txStream.ready) {
+            index := index + 1
+            when(index === datas.length) {
+              goto(COLLECT)
+            }
+          }
+        }
+      }
+
+      val COLLECT = new State {
         whenIsActive {
           when(~tm1638_keys(3)) {
             goto(START)
