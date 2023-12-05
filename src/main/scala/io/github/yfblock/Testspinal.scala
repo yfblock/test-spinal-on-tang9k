@@ -22,6 +22,7 @@ class Testspinal extends Component {
     val tm1638 = master(TM1638Port())
     val srf05 = master(SRF05Port())
     val uart_tx = out Bool()
+    val uart_rx = out Bool()
   }
 
   noIoPrefix()
@@ -39,7 +40,6 @@ class Testspinal extends Component {
     )
   )
 
-  val distance = UInt(16 bits)
   val tm1638_leds = UInt(8 bits)
   val tm1638_keys = UInt(8 bits)
   
@@ -89,9 +89,9 @@ class Testspinal extends Component {
           tm1637Displays(1) := ds.getMin0
           tm1637Displays(0) := ds.getMin1.resized
 
-          for(i <- 0 until 4) {
-            tm1638Displays(4 + i) := distance((16 - i * 4 - 1) downto (16 - (i + 1) * 4))
-          }
+          // for(i <- 0 until 4) {
+          //   tm1638Displays(4 + i) := distance((16 - i * 4 - 1) downto (16 - (i + 1) * 4))
+          // }
         }
       }
     }
@@ -122,8 +122,9 @@ class Testspinal extends Component {
         }
       }
     }
-
-    SRF05(io.srf05, distance)
+    
+    // val distance = UInt(16 bits)
+    // SRF05(io.srf05, distance)
 
     new SlowArea(500 kHz) {
       // SpiLcdST7789(io.lcd_interface)
