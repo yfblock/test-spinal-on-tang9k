@@ -54,13 +54,10 @@ case class TimeDisplay() extends Bundle {
 // ACK signal will turn DIO as LOW.
 object TM1637 {
 
-  def apply(port: TMPort, ds: DataStore): TM1637 = {
+  def apply(port: TMPort, display: Vec[UInt]): TM1637 = {
     val tm1637 = new TM1637()
     port <> tm1637.io.port
-    tm1637.io.displays(3) := ds.getSec0
-    tm1637.io.displays(2) := ds.getSec1.resized
-    tm1637.io.displays(1) := ds.getMin0
-    tm1637.io.displays(0) := ds.getMin1.resized
+    tm1637.io.displays <> display
     tm1637
   }
 }

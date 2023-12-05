@@ -26,17 +26,10 @@ case class TM1638Port() extends Bundle with IMasterSlave {
 }
 
 object TM1638 {
-  def apply(port: TM1638Port, ds: DataStore, leds: UInt, keys: UInt): TM1638 = {
+  def apply(port: TM1638Port, displays: Vec[UInt], leds: UInt, keys: UInt): TM1638 = {
     val tm1638 = new TM1638()
     port <> tm1638.io.port
-    tm1638.io.display(0) := ds.getYear1.resized
-    tm1638.io.display(1) := ds.getYear0
-    tm1638.io.display(2) := ds.getMonth1.resized
-    tm1638.io.display(3) := ds.getMonth0
-    tm1638.io.display(4) := ds.getDay1.resized
-    tm1638.io.display(5) := ds.getDay0
-    tm1638.io.display(6) := ds.getHour1.resized
-    tm1638.io.display(7) := ds.getHour0
+    tm1638.io.display <> displays
     tm1638.io.leds <> leds
     keys <> tm1638.io.keys
     tm1638
@@ -73,8 +66,8 @@ class TM1638 extends Component {
   )
 
   for (i <- 0 until 4) {
-    io.keys(i)     := io.keys(i) | rdatas(i)(0)
-    io.keys(i + 4) := io.keys(i + 4) | rdatas(i)(4)
+    io.keys(i)     := rdatas(i)(0)
+    io.keys(i + 4) := rdatas(i)(4)
   }
 
   new StateMachine {
