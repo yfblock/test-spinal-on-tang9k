@@ -73,8 +73,6 @@ class TM1638 extends Component {
   )
 
   for (i <- 0 until 4) {
-    // io.keys((i << 1))     := io.keys((i << 1)) | rdatas(i)(0)
-    // io.keys((i << 1) + 1) := io.keys((i << 1) + 1) | rdatas(i)(4)
     io.keys(i)     := io.keys(i) | rdatas(i)(0)
     io.keys(i + 4) := io.keys(i + 4) | rdatas(i)(4)
   }

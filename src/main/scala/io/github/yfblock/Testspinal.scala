@@ -19,6 +19,7 @@ class Testspinal extends Component {
     val tm = master(TMPort())
     val ds1302 = master(DSPort())
     val tm1638 = master(TM1638Port())
+    val uart_tx = out Bool()
   }
 
   // or else .cst requires a `io_` prefix.
@@ -44,6 +45,7 @@ class Testspinal extends Component {
 
 //  val oscClockDomain = OscClockDomain(100, io.reset_button);
   new ClockingArea(clk) {
+    UartTx(io.uart_tx)
     new SlowArea(500 kHz) {
       // SpiLcdST7789(io.lcd_interface)
       TM1637(io.tm, ds)
