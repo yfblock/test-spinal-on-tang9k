@@ -10,6 +10,21 @@ import scala.language.postfixOps
 import spinal.lib.io.InOutWrapper
 import spinal.lib.fsm._
 import spinal.lib
+import spinal.lib.com.uart.Uart
+import spinal.lib.com.spi.SpiMaster
+
+case class UartData(s: String) extends Area {
+  val datas = Vec(s.map(c => B(c.toInt, 8 bits)))
+  val index = Reg(UInt(log2Up(datas.length) bits)).init(0)
+
+  def next(): Bool = {
+    index := index + 1
+    index =/= datas.length - 1
+  }
+
+  def reset() = index := 0
+  def current: Bits = datas(index)
+}
 
 class Testspinal extends Component {
   val io = new Bundle {
@@ -22,13 +37,11 @@ class Testspinal extends Component {
     val ds1302 = master(DSPort())
     val tm1638 = master(TM1638Port())
     // val srf05 = master(SRF05Port())
-    val uart_tx = out Bool()
-    val uart_rx = in(Bool())
+    val uart = master(Uart())
+    val spi = master(SpiMaster())
   }
 
   noIoPrefix()
-
-  val ds = DataStore()
 
   val clk = ClockDomain(
     clock = io.xtal_in,
@@ -41,44 +54,56 @@ class Testspinal extends Component {
     )
   )
 
-  val tm1638_leds = UInt(8 bits)
-  val tm1638_keys = UInt(8 bits)
-  
-  tm1638_leds := tm1638_keys
+  //  val oscClockDomain = OscClockDomain(100, io.reset_button);
 
-  val tx_en = Bool()
-  val tx_data = Bits(8 bits)
-  val is_busy = Bool()
-//  val oscClockDomain = OscClockDomain(100, io.reset_button);
-  val tm1638Displays = Vec.fill(8)(UInt(4 bits))
-  val tm1637Displays = Vec.fill(4)(UInt(4 bits))
-
-  for(i <- 0 until 4) {
-    tm1637Displays(i) := 0
-    tm1638Displays(i * 2) := 0
-    tm1638Displays(i * 2 + 1) := 0
-  }
-
-  val rxStream = lib.Stream(Bits(8 bits))
-  val txStream = lib.Stream(Bits(8 bits))
   new ClockingArea(clk) {
+
+    val spiData = Bits(8 bits)
+
+    val ds = DataStore()
+    val tm1638_leds = UInt(8 bits)
+    val tm1638_keys = UInt(8 bits)
+    
+    tm1638_leds := tm1638_keys
+
+    val tx_en = Bool()
+    val tx_data = Bits(8 bits)
+    val is_busy = Bool()
+    val tm1638Displays = Vec.fill(8)(UInt(4 bits))
+    val tm1637Displays = Vec.fill(4)(UInt(4 bits))
+
+    // give all tm displays with 0
+    tm1637Displays.map(a => a:=0)
+    tm1638Displays.map(a => a:=0)
+
+    // Uart Transmite
+    val rxStream = lib.Stream(Bits(8 bits))
+    val txStream = lib.Stream(Bits(8 bits))
+    val uartData = UartData("Hello\r\n")
+    UartController(io.uart, rxStream, txStream)
+    txStream.setIdle()
+
     val asciiReg = Reg(Bits(8 bits)) init (0)
     new StateMachine {
-      val START = new State {
+      val START = new State with EntryPoint {
         whenIsActive {
-          tm1638Displays(0) := ds.getYear1.resized
-          tm1638Displays(1) := ds.getYear0
-          tm1638Displays(2) := ds.getMonth1.resized
-          tm1638Displays(3) := ds.getMonth0
-          tm1638Displays(4) := ds.getDay1.resized
-          tm1638Displays(5) := ds.getDay0
-          tm1638Displays(6) := ds.getHour1.resized
-          tm1638Displays(7) := ds.getHour0
+          VecUtil.initWith(tm1638Displays, Array(
+            ds.getYear1.resized,
+            ds.getYear0,
+            ds.getMonth1.resized,
+            ds.getMonth0,
+            ds.getDay1.resized,
+            ds.getDay0,
+            ds.getHour1.resized,
+            ds.getHour0
+          ))
 
-          tm1637Displays(3) := ds.getSec0
-          tm1637Displays(2) := ds.getSec1.resized
-          tm1637Displays(1) := ds.getMin0
-          tm1637Displays(0) := ds.getMin1.resized
+          VecUtil.initWith(tm1637Displays, Array(
+            ds.getSec0,
+            ds.getSec1.resized,
+            ds.getMin0,
+            ds.getMin1.resized
+          ).reverse)
 
           when(tm1638_keys(0)) {
             goto(SUPER_SONIC)
@@ -86,34 +111,26 @@ class Testspinal extends Component {
         }
       }
 
-      val SUPER_SONIC = new State with EntryPoint {
+      val SUPER_SONIC = new State {
         whenIsActive {
-          tm1637Displays(3) := ds.getSec0
-          tm1637Displays(2) := ds.getSec1.resized
-          tm1637Displays(1) := ds.getMin0
-          tm1637Displays(0) := ds.getMin1.resized
-          tm1638Displays(0) := asciiReg(3 downto 0).asUInt
-          tm1638Displays(1) := asciiReg(7 downto 4).asUInt
+          VecUtil.initWith(tm1637Displays, Array(
+            ds.getSec0,
+            ds.getSec1.resized,
+            ds.getMin0,
+            ds.getMin1.resized
+          ).reverse)
+          tm1638Displays(7) := asciiReg(3 downto 0).asUInt
+          tm1638Displays(6) := asciiReg(7 downto 4).asUInt
+          tm1638Displays(5) := spiData(3 downto 0).asUInt
+          tm1638Displays(4) := spiData(7 downto 4).asUInt
           when(rxStream.valid) {
-            txStream.ready := True
             asciiReg := rxStream.payload
           }
-          // for(i <- 0 until 4) {
-          //   tm1638Displays(4 + i) := distance((16 - i * 4 - 1) downto (16 - (i + 1) * 4))
-          // }
         }
       }
     }
-    // Uart Transmite
-    val datas = Vec("Hello\r\n".map(c => B(c.toInt, 8 bits)))
-    val index = Reg(UInt(log2Up(datas.length) bits)).init(0)
-
-    UartController(io.uart_rx, rxStream, io.uart_tx, txStream)
-    txStream.valid := False
-    txStream.payload := '4'
+    
     new StateMachine {
-      val sendFinished = Reg(Bool()) init(False)
-
       val START: State = new State with EntryPoint {
         whenIsActive {
           when(tm1638_keys(3)) {
@@ -123,12 +140,12 @@ class Testspinal extends Component {
       }
 
       val END = new State {
+        onEntry(uartData.reset())
         whenIsActive {
           txStream.valid := True
-          txStream.payload := datas(index)
+          txStream.payload := uartData.current
           when(txStream.ready) {
-            index := index + 1
-            when(index === datas.length) {
+            when(~uartData.next()) {
               goto(COLLECT)
             }
           }
@@ -146,7 +163,7 @@ class Testspinal extends Component {
     
     // val distance = UInt(16 bits)
     // SRF05(io.srf05, distance)
-
+    P25Q32(io.spi, spiData)
     new SlowArea(500 kHz) {
       // SpiLcdST7789(io.lcd_interface)
       TM1637(io.tm, tm1637Displays)
