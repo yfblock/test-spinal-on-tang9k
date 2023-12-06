@@ -32,10 +32,12 @@ class P25Q32(ssWidth: Int) extends Component {
     dataWidth = 8
   ))
 
+  val READ_JEDEC = B"8'h9F"
+  val READ_COMMAND = B"8'h3"
   spi.io.spi <> io.port
   spi.io.cmd.setIdle()
   // spi.io.cmd.payload.mode := SpiMasterCtrlCmdMode.DATA
-  spi.io.cmd.payload.args := B"8'h3".resized
+  spi.io.cmd.payload.args := 0
 
   spi.io.config.kind.cpol := False
   spi.io.config.kind.cpha := False
@@ -51,8 +53,8 @@ class P25Q32(ssWidth: Int) extends Component {
         addrIndex := 0
         spi.io.cmd.valid := True
         // spi.io.cmd.payload.mode := SpiMasterCtrlCmdMode.DATA
-        spi.io.cmd.payload.args := B"8'h3".resized
-        when(spi.io.cmd.ready)(goto(SEND_ADDRESS))
+        spi.io.cmd.payload.args := READ_JEDEC.resized
+        when(spi.io.cmd.ready)(goto(END))
       }
     }
 
@@ -72,13 +74,12 @@ class P25Q32(ssWidth: Int) extends Component {
 
     val END = new State {
       whenIsActive {
-
+        spi.io.cmd.valid := True
+        when(spi.io.rsp.valid) {
+          io.export := spi.io.rsp.payload
+        }
       }
     }
-  }
-
-  when(spi.io.rsp.valid) {
-    io.export := spi.io.rsp.payload
   }
   
   // // 创建 SPI 主设备
