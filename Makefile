@@ -9,17 +9,17 @@ GW_SH := gw_sh
 endif
 
 SOURCES = src/main/scala/io/github/yfblock/*.scala
-VERILOG_FILE := rtl/Testspinal.v
-BITSTREAM_FILE := impl/pnr/Testspinal.fs
-REPORT_FILE := impl/pnr/Testspinal.rpt.txt
+VERILOG_FILE := fpga_project/src/Testspinal.v
+BITSTREAM_FILE := fpga_project/impl/pnr/Testspinal.fs
+REPORT_FILE := fpga_project/impl/pnr/Testspinal.rpt.txt
 
 all: $(BITSTREAM_FILE)
 
-$(BITSTREAM_FILE) $(REPORT_FILE): $(VERILOG_FILE) rtl/*.tcl
-	$(GW_SH) rtl/synth.tcl
+$(BITSTREAM_FILE) $(REPORT_FILE): $(VERILOG_FILE) fpga_project/src/*.tcl
+	$(GW_SH) fpga_project/src/synth.tcl
 	@cat $(REPORT_FILE) | grep -A32 "Resource Usage Summary"
 
-$(VERILOG_FILE): $(SOURCES) build.sbt rtl/tang-nano-9k.cst
+$(VERILOG_FILE): $(SOURCES) build.sbt fpga_project/src/tang-nano-9k.cst
 	sbt "runMain io.github.yfblock.Main"
 
 verilog: $(VERILOG_FILE)

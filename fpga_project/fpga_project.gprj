@@ -5,8 +5,8 @@
     <Version>5</Version>
     <Device name="GW1NR-9C" pn="GW1NR-LV9QN88PC6/I5">gw1nr9c-004</Device>
     <FileList>
-        <File path="rtl/Testspinal.v" type="file.verilog" enable="1"/>
-        <File path="rtl/tang-nano-9k.cst" type="file.cst" enable="1"/>
+        <File path="src/Testspinal.v" type="file.verilog" enable="1"/>
+        <File path="src/tang-nano-9k.cst" type="file.cst" enable="1"/>
         <File path="src/spi.rao" type="file.gao" enable="1"/>
     </FileList>
 </Project>

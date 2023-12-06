@@ -180,7 +180,7 @@ class Testspinal extends Component {
 object Main {
   def main(args: Array[String]): Unit = {
     new java.io.File("rtl").mkdirs
-    SpinalConfig(targetDirectory = "rtl", anonymSignalPrefix = "tmp").generateVerilog(InOutWrapper(new Testspinal))
+    SpinalConfig(targetDirectory = "fpga_project/src", anonymSignalPrefix = "tmp").generateVerilog(InOutWrapper(new Testspinal))
   }
 }
 
