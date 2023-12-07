@@ -28,7 +28,9 @@ class P25Q32(ssWidth: Int) extends Component {
 
   val bitIndex = Reg(UInt(3 bits)).init(7)
   val step = Reg(UInt(1 bits)).init(0)
-  val command = Reg(Bits(8 bits)).init(0x9F)
+  val command = Reg(Bits(8 bits)).init(0x03)
+  val address = Reg(Bits(24 bits)).init(0)
+  val aIndex = Reg(UInt(3 bits)).init(0)
 
   val fsm = new StateMachine {
     val IDLE = new State with EntryPoint {
@@ -54,8 +56,14 @@ class P25Q32(ssWidth: Int) extends Component {
 
     val END = new State {
       whenIsActive {
-        when(command === 0x9F) {
+        address := address |<< 8
+        when(aIndex < 3) {
+          command := address(23 downto 16)
+          aIndex  := aIndex + 1
+          goto(WR)
+        } elsewhen(aIndex === 3) {
           command := 0xff
+          aIndex  := aIndex + 1
           goto(WR)
         } otherwise {
           io.port.ss := 1
