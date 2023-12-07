@@ -2,8 +2,8 @@
 # A simple gw_sh build script
 # by andelf
 
-add_file -type verilog "fpga_project/src/Testspinal.v"
-add_file -type cst "fpga_project/src/tang-nano-9k.cst"
+add_file -type verilog "src/Testspinal.v"
+add_file -type cst "src/tang-nano-9k.cst"
 
 # NOTE: Tang Nano 9k is a GW1NR-9C device! not GW1NR-9
 set_device GW1NR-LV9QN88PC6/I5 -name GW1NR-9C

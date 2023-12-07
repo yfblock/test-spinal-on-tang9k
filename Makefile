@@ -16,7 +16,7 @@ REPORT_FILE := fpga_project/impl/pnr/Testspinal.rpt.txt
 all: $(BITSTREAM_FILE)
 
 $(BITSTREAM_FILE) $(REPORT_FILE): $(VERILOG_FILE) fpga_project/src/*.tcl
-	$(GW_SH) fpga_project/src/synth.tcl
+	cd fpga_project && $(GW_SH) src/synth.tcl
 	@cat $(REPORT_FILE) | grep -A32 "Resource Usage Summary"
 
 $(VERILOG_FILE): $(SOURCES) build.sbt fpga_project/src/tang-nano-9k.cst
