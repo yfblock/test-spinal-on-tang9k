@@ -7,7 +7,7 @@ import child_process from "node:child_process"
 
 function initSpiFlashData() {
     const fileBytes = [];
-    for (let i = 0; i < 256; i += 1) {
+    for (let i = 1; i <= 256; i += 1) {
         fileBytes.push(i);
     }
 
