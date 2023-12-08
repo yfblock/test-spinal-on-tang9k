@@ -12,6 +12,7 @@ import spinal.lib.fsm._
 import spinal.lib
 import spinal.lib.com.uart.Uart
 import spinal.lib.com.spi.SpiMaster
+import spinal.lib.com.i2c.I2c
 
 case class UartData(s: String) extends Area {
   val datas = Vec(s.map(c => B(c.toInt, 8 bits)))
@@ -39,6 +40,7 @@ class Testspinal extends Component {
     // val srf05 = master(SRF05Port())
     val uart = master(Uart())
     val spi = master(SpiMaster())
+    val i2c = master(I2CPort())
   }
 
   noIoPrefix()
@@ -165,6 +167,7 @@ class Testspinal extends Component {
     // SRF05(io.srf05, distance)
     P25Q32(io.spi, spiData)
     new SlowArea(500 kHz) {
+      SSD1306(io.i2c)
       // SpiLcdST7789(io.lcd_interface)
       TM1637(io.tm, tm1637Displays)
       // RealClock(tclock)
