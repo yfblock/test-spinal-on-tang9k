@@ -31,17 +31,29 @@ class SSD1306 extends Component {
     noIoPrefix()
 
     object I2cCmdMode extends SpinalEnum{
-        val START, SLAVE_ADDR, STOP, DROP, END = newElement()
+        val START, SLAVE_ADDR, STOP, ACK, END = newElement()
     }
 
+    val commandList = Vec.fill(9)(UInt(8 bits))
+    commandList(0) := 0x78
+    commandList(1) := 0x0
+    commandList(2) := 0x8d
+    commandList(3) := 0x0
+    commandList(4) := 0x14
+    commandList(5) := 0x0
+    commandList(6) := 0xaf
+    commandList(7) := 0x0
+    commandList(8) := 0xa5
+    val cIndex = Reg(UInt(4 bits)).init(0)
     val state = Reg(I2cCmdMode).init(I2cCmdMode.START)
     val step = Reg(UInt(2 bits)).init(0)
-    val command = Reg(UInt(8 bits)).init(0)
-    val bitIndex = Reg(UInt(3 bits)).init(0)
+    // val command = Reg(UInt(8 bits)).init(0x78)
+    val command = commandList(cIndex)
+    val bitIndex = Reg(UInt(3 bits)).init(7)
     step := step + 1
     io.port.sda.writeEnable := True
-    io.port.sda.write := True
-    io.port.scl := True
+    io.port.scl.setAsReg().init(True)
+    io.port.sda.write.setAsReg().init(True)
 
     switch(state) {
         is(I2cCmdMode.START) {
@@ -53,14 +65,24 @@ class SSD1306 extends Component {
         }
         is(I2cCmdMode.SLAVE_ADDR) {
             io.port.scl := step(1)
-            // io.port.sda.write := 
+            when(step === 1) {
+                io.port.sda.write := command(bitIndex)
+            }
             when(step === 3) {
-                bitIndex := bitIndex + 1
-                when(bitIndex === 7)(state := I2cCmdMode.DROP)
+                bitIndex := bitIndex - 1
+                when(bitIndex === 0)(state := I2cCmdMode.ACK)
             }
         }
-        is(I2cCmdMode.DROP) {
-
+        is(I2cCmdMode.ACK) {
+            io.port.scl := step(1)
+            io.port.sda.writeEnable := False
+            when(step === 3) {
+                state := I2cCmdMode.SLAVE_ADDR
+                cIndex := cIndex + 1
+                when(cIndex === 8) {
+                    state := I2cCmdMode.STOP
+                }
+            }
         }
         is(I2cCmdMode.STOP) {
             io.port.scl := True
