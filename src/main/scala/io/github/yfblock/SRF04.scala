@@ -31,6 +31,10 @@ class SRF05 extends Component {
 
     def read(): UInt = io.distance
 
+    val timer = Reg(UInt(32 bits)).init(0)
+    def isTimeEnd = timer === 27_000_000/5
+    timer := timer + 1
+    when(isTimeEnd)(timer := 0)
     val cnt = Reg(UInt(32 bits)) init (0)
     cnt := cnt + 1
     new StateMachine {
@@ -52,9 +56,10 @@ class SRF05 extends Component {
 
          val WAIT = new State {
              whenIsActive {
-                 when(io.port.echo === True){
+                when(io.port.echo === True){
                      goto(WAIT_END)
-                 }
+                }
+                when(isTimeEnd)(goto(IDLE))
              }
          }
 
@@ -70,8 +75,8 @@ class SRF05 extends Component {
                     // = cnt * 34 / 5400
                     // = cnt * 17 / 2700
                     // the equation below is optimized and unit is mm
-                    // io.distance := (cnt * 17 / 2700).resized
-                    io.distance := cnt.resized
+                    io.distance := (cnt * 17 / 27000).resized
+                    // io.distance := cnt.resized
                     goto(END)
                 }
             }
@@ -79,6 +84,9 @@ class SRF05 extends Component {
 
         val END = new State {
             whenIsActive {
+                when(isTimeEnd){
+                    goto(IDLE)
+                }
 //                goto(IDLE)
             }
         }
