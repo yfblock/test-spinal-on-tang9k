@@ -13,4 +13,4 @@ set_option -output_base_name Testspinal
 set_option -cst_warn_to_error 0
 set_option -bit_security 0
 set_option -use_mspi_as_gpio 1
-
+set_option -use_sspi_as_gpio 1

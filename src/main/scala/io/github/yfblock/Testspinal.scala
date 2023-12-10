@@ -38,6 +38,7 @@ class Testspinal extends Component {
     val ds1302 = master(DSPort())
     val tm1638 = master(TM1638Port())
     // val srf05 = master(SRF05Port())
+    val srf04 = master(SRF04Port())
     val uart = master(Uart())
     val spi = master(SpiMaster())
     val i2c = master(I2CPort())
@@ -59,6 +60,7 @@ class Testspinal extends Component {
   //  val oscClockDomain = OscClockDomain(100, io.reset_button);
 
   new ClockingArea(clk) {
+    val srf04 = SRF04(io.srf04)
 
     val spiData = Bits(8 bits)
 
@@ -125,6 +127,8 @@ class Testspinal extends Component {
           tm1638Displays(6) := asciiReg(7 downto 4).asUInt
           tm1638Displays(5) := spiData(3 downto 0).asUInt
           tm1638Displays(4) := spiData(7 downto 4).asUInt
+          tm1638Displays(3) := srf04.read()(3 downto 0)
+          tm1638Displays(2) := srf04.read()(7 downto 4)
           when(rxStream.valid) {
             asciiReg := rxStream.payload
           }

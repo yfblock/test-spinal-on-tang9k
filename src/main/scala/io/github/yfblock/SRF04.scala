@@ -4,7 +4,7 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.fsm._
 
-case class SRF05Port() extends Bundle with IMasterSlave {
+case class SRF04Port() extends Bundle with IMasterSlave {
     val trig = Bool()
     val echo = Bool()
 
@@ -14,21 +14,22 @@ case class SRF05Port() extends Bundle with IMasterSlave {
     }
 }
 
-object SRF05 {
-    def apply(port: SRF05Port, distance: UInt): SRF05 = {
+object SRF04 {
+    def apply(port: SRF04Port): SRF05 = {
         val srf05 = new SRF05()
         srf05.io.port <> port
-        srf05.io.distance <> distance
         srf05
     }
 }
 
 class SRF05 extends Component {
     val io = new Bundle {
-        val port = master(SRF05Port())
+        val port = master(SRF04Port())
         val distance = out(UInt(16 bits)).setAsReg().init(0)
     }
     io.port.trig := False
+
+    def read(): UInt = io.distance
 
     val cnt = Reg(UInt(32 bits)) init (0)
     cnt := cnt + 1
