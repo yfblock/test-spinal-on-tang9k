@@ -45,18 +45,18 @@ class SRF05 extends Component {
             whenIsActive {
                 io.port.trig := True
                 when(cnt === 450) {
-                    goto(WAIT_END)
+                    goto(WAIT)
                 }
             }
         }
 
-        // val WAIT = new State {
-        //     whenIsActive {
-        //         when(io.port.echo === True){
-        //             goto(WAIT_END)
-        //         }
-        //     }
-        // }
+         val WAIT = new State {
+             whenIsActive {
+                 when(io.port.echo === True){
+                     goto(WAIT_END)
+                 }
+             }
+         }
 
         val WAIT_END = new State {
             onEntry(cnt := 0)
@@ -79,7 +79,7 @@ class SRF05 extends Component {
 
         val END = new State {
             whenIsActive {
-                goto(IDLE)
+//                goto(IDLE)
             }
         }
 
