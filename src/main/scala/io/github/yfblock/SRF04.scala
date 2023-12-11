@@ -4,6 +4,8 @@ import spinal.core._
 import spinal.lib._
 import spinal.lib.fsm._
 
+import scala.language.postfixOps
+
 case class SRF04Port() extends Bundle with IMasterSlave {
     val trig = Bool()
     val echo = Bool()
@@ -15,14 +17,14 @@ case class SRF04Port() extends Bundle with IMasterSlave {
 }
 
 object SRF04 {
-    def apply(port: SRF04Port): SRF05 = {
-        val srf05 = new SRF05()
+    def apply(port: SRF04Port): SRF04 = {
+        val srf05 = new SRF04()
         srf05.io.port <> port
         srf05
     }
 }
 
-class SRF05 extends Component {
+class SRF04 extends Component {
     val io = new Bundle {
         val port = master(SRF04Port())
         val distance = out(UInt(16 bits)).setAsReg().init(0)
@@ -35,9 +37,16 @@ class SRF05 extends Component {
     def isTimeEnd = timer === 27_000_000/5
     timer := timer + 1
     when(isTimeEnd)(timer := 0)
-    val cnt = Reg(UInt(32 bits)) init (0)
+    val cnt = Reg(UInt(21 bits)) init (0)
     cnt := cnt + 1
-    new StateMachine {
+    
+//    object FSMSTate extends SpinalEnum {
+//        val IDLE, SEND, WAIT, WAIT_END = newElement()
+//    }
+
+
+    val fsm = new StateMachine {
+
         val IDLE: State = new State with EntryPoint {
             onEntry(cnt := 0)
             whenIsActive {
@@ -75,7 +84,7 @@ class SRF05 extends Component {
                     // = cnt * 34 / 5400
                     // = cnt * 17 / 2700
                     // the equation below is optimized and unit is mm
-                    io.distance := (cnt * 17 / 27000).resized
+                    io.distance := (cnt / 27000 * 17).resized
                     // io.distance := cnt.resized
                     goto(END)
                 }
@@ -91,5 +100,10 @@ class SRF05 extends Component {
             }
         }
 
+        always {
+            when(isTimeEnd) {
+                goto(IDLE)
+            }
+        }
     }
 }
