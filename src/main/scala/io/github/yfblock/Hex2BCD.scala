@@ -26,10 +26,8 @@ class Hex2BCD(inputWitdh: Int) extends Component {
   }
 
   for(i <- 0 until Hex2BCD.convertBits(inputWitdh)) {
-//    io.output(i) := io.input % U(Math.pow(10, i).toInt, resultWidth bits)
     io.output(i) := (io.input / Math.pow(10, i).toInt  % Math.pow(10, i + 1).toInt).resized
   }
 
   def output = io.output
-  
 }

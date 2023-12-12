@@ -128,8 +128,6 @@ class Testspinal extends Component {
           tm1638Displays(5) := spiData(3 downto 0).asUInt
           tm1638Displays(4) := spiData(7 downto 4).asUInt
 
-//          tm1638Displays(3) := srf04.read()(3 downto 0)
-//          tm1638Displays(2) := srf04.read()(7 downto 4)
           val hex2bcd = Hex2BCD(8)(srf04.read()(7 downto 0))
           tm1638Displays(3) := hex2bcd.output(0)
           tm1638Displays(2) := hex2bcd.output(1)
