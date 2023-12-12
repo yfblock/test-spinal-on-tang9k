@@ -34,7 +34,7 @@ class SRF04 extends Component {
     def read(): UInt = io.distance
 
     val timer = Reg(UInt(32 bits)).init(0)
-    def isTimeEnd = timer === 27_000_000/5
+    def isTimeEnd = timer === 27_000_000 / 5
     timer := timer + 1
     when(isTimeEnd)(timer := 0)
     val cnt = Reg(UInt(21 bits)) init (0)
@@ -84,7 +84,7 @@ class SRF04 extends Component {
                     // = cnt * 34 / 5400
                     // = cnt * 17 / 2700
                     // the equation below is optimized and unit is mm
-                    io.distance := (cnt / 27000 * 17).resized
+                    io.distance := (cnt * 17 / 27000).resized
                     // io.distance := cnt.resized
                     goto(END)
                 }

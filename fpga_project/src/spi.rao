@@ -12,40 +12,6 @@
             <Signal>spi_miso</Signal>
             <Signal>srf04_trig</Signal>
             <Signal>srf04_echo</Signal>
-            <Bus name="sRF05_1/cnt[31:0]">
-                <Signal>sRF05_1/cnt[31]</Signal>
-                <Signal>sRF05_1/cnt[30]</Signal>
-                <Signal>sRF05_1/cnt[29]</Signal>
-                <Signal>sRF05_1/cnt[28]</Signal>
-                <Signal>sRF05_1/cnt[27]</Signal>
-                <Signal>sRF05_1/cnt[26]</Signal>
-                <Signal>sRF05_1/cnt[25]</Signal>
-                <Signal>sRF05_1/cnt[24]</Signal>
-                <Signal>sRF05_1/cnt[23]</Signal>
-                <Signal>sRF05_1/cnt[22]</Signal>
-                <Signal>sRF05_1/cnt[21]</Signal>
-                <Signal>sRF05_1/cnt[20]</Signal>
-                <Signal>sRF05_1/cnt[19]</Signal>
-                <Signal>sRF05_1/cnt[18]</Signal>
-                <Signal>sRF05_1/cnt[17]</Signal>
-                <Signal>sRF05_1/cnt[16]</Signal>
-                <Signal>sRF05_1/cnt[15]</Signal>
-                <Signal>sRF05_1/cnt[14]</Signal>
-                <Signal>sRF05_1/cnt[13]</Signal>
-                <Signal>sRF05_1/cnt[12]</Signal>
-                <Signal>sRF05_1/cnt[11]</Signal>
-                <Signal>sRF05_1/cnt[10]</Signal>
-                <Signal>sRF05_1/cnt[9]</Signal>
-                <Signal>sRF05_1/cnt[8]</Signal>
-                <Signal>sRF05_1/cnt[7]</Signal>
-                <Signal>sRF05_1/cnt[6]</Signal>
-                <Signal>sRF05_1/cnt[5]</Signal>
-                <Signal>sRF05_1/cnt[4]</Signal>
-                <Signal>sRF05_1/cnt[3]</Signal>
-                <Signal>sRF05_1/cnt[2]</Signal>
-                <Signal>sRF05_1/cnt[1]</Signal>
-                <Signal>sRF05_1/cnt[0]</Signal>
-            </Bus>
         </SignalList>
         <Triggers>
             <Trigger index="0">
@@ -91,5 +57,5 @@
             <Expression>M0</Expression>
         </Expressions>
     </AoCore>
-    <GAO_ID>0100010111101001</GAO_ID>
+    <GAO_ID>1110110101100101</GAO_ID>
 </GAO_CONFIG>

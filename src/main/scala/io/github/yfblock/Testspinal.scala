@@ -134,6 +134,7 @@ class Testspinal extends Component {
           tm1638Displays(3) := hex2bcd.output(0)
           tm1638Displays(2) := hex2bcd.output(1)
           tm1638Displays(1) := hex2bcd.output(2)
+
           when(rxStream.valid) {
             asciiReg := rxStream.payload
           }
